@@ -2,14 +2,16 @@ const fs = require("fs");
 const path = require("path");
 
 const registerRoutes = (app) => {
-    const routesPath = __dirname;
+  const routesPath = __dirname;
+  const routeFiles = fs
+    .readdirSync(routesPath)
+    .filter((file) => file.endsWith(".routes.js"))
+    .sort();
 
-    fs.readdirSync(routesPath).forEach((file) => {
-        if (file !== "index.js") {
-            const route = require(path.join(routesPath, file));
-            app.use("/api", route);
-        }
-    });
+  routeFiles.forEach((file) => {
+    const route = require(path.join(routesPath, file));
+    app.use("/api", route);
+  });
 };
 
 module.exports = registerRoutes;
