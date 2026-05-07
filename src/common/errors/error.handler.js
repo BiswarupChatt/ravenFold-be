@@ -1,4 +1,4 @@
-const { nodeEnv } = require('../config/env');
+const { nodeEnv } = require('../../config/env.config');
 
 function errorHandler(error, req, res, next) {
   if (res.headersSent) {
@@ -10,6 +10,10 @@ function errorHandler(error, req, res, next) {
     success: false,
     message: statusCode === 500 ? 'Internal server error' : error.message,
   };
+
+  if (error.details) {
+    response.details = error.details;
+  }
 
   if (nodeEnv === 'development') {
     response.stack = error.stack;
