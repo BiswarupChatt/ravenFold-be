@@ -9,6 +9,10 @@ async function login(req, res) {
   return sendSuccess(res, await authService.login(req.body), 'Login successful');
 }
 
+async function register(req, res) {
+  return sendSuccess(res, await authService.register(req.body), 'Registration successful', 201);
+}
+
 async function verifyOtp(req, res) {
   return sendSuccess(res, await authService.verifyOtp(req.body), 'OTP verification flow not implemented yet');
 }
@@ -17,11 +21,12 @@ async function getMe(req, res) {
   return sendSuccess(res, authService.getAuthenticatedUser(req.user), 'Authenticated user fetched');
 }
 
-export { getMe, getStatus, login, verifyOtp };
+export { getMe, getStatus, login, register, verifyOtp };
 
 export default {
   getMe,
   getStatus,
   login,
+  register,
   verifyOtp,
 };
