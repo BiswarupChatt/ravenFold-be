@@ -1,6 +1,6 @@
-function calculateTax() {
+const calculateTax = () => {
   return 0;
-}
+};
 
 export { calculateTax };
 

@@ -1,6 +1,6 @@
-function getPublicUrl(path) {
+const getPublicUrl = (path) => {
   return path;
-}
+};
 
 export { getPublicUrl };
 

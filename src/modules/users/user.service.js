@@ -1,11 +1,14 @@
-import userRepository from '@/modules/users/user.repository.js';
+import { sendSuccess } from '@/common/helpers/response.helper.js';
 
-function getStatus() {
+const getStatusData = () => {
   return {
     module: 'users',
-    repository: userRepository.name,
   };
-}
+};
+
+const getStatus = async (req, res) => {
+  return sendSuccess(res, getStatusData(), 'Users module ready');
+};
 
 export { getStatus };
 

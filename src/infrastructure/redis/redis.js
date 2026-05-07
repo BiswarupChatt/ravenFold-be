@@ -1,7 +1,7 @@
 import { redisUrl } from '@/config/redis.config.js';
 import logger from '@/common/logger/logger.js';
 
-async function connectRedis() {
+const connectRedis = async () => {
   if (!redisUrl) {
     logger.info('Redis URL not configured. Skipping Redis connection.');
     return null;
@@ -9,11 +9,11 @@ async function connectRedis() {
 
   logger.info('Redis connection placeholder ready.');
   return null;
-}
+};
 
-async function disconnectRedis() {
+const disconnectRedis = async () => {
   return null;
-}
+};
 
 export { connectRedis, disconnectRedis };
 

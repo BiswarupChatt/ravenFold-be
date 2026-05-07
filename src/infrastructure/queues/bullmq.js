@@ -1,10 +1,10 @@
-function createQueue(name) {
+const createQueue = (name) => {
   return {
-    add() {
+    add: () => {
       throw new Error(`${name} queue is not configured yet`);
     },
   };
-}
+};
 
 export { createQueue };
 

@@ -2,16 +2,11 @@ import express from 'express';
 
 import adminService from '@/modules/admin/admin.service.js';
 import dashboardService from '@/modules/admin/dashboard.service.js';
-import { sendSuccess } from '@/common/helpers/response.helper.js';
+import asyncHandler from '@/common/helpers/asyncHandler.helper.js';
 
 const router = express.Router();
 
-router.get('/', (req, res) => {
-  sendSuccess(res, adminService.getStatus(), 'Admin module ready');
-});
-
-router.get('/dashboard', (req, res) => {
-  sendSuccess(res, dashboardService.getDashboard(), 'Admin dashboard ready');
-});
+router.get('/', asyncHandler(adminService.getStatus));
+router.get('/dashboard', asyncHandler(dashboardService.getDashboard));
 
 export default router;

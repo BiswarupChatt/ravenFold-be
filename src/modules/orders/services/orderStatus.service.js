@@ -1,6 +1,6 @@
-function canTransitionOrderStatus() {
+const canTransitionOrderStatus = () => {
   return false;
-}
+};
 
 export { canTransitionOrderStatus };
 

@@ -1,10 +1,10 @@
-function toPaise(amount) {
+const toPaise = (amount) => {
   return Math.round(Number(amount || 0) * 100);
-}
+};
 
-function fromPaise(amount) {
+const fromPaise = (amount) => {
   return Number(amount || 0) / 100;
-}
+};
 
 export { fromPaise, toPaise };
 

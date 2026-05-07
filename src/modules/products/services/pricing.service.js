@@ -1,6 +1,6 @@
-function calculateProductPrice(product) {
+const calculateProductPrice = (product) => {
   return Number(product && product.price ? product.price : 0);
-}
+};
 
 export { calculateProductPrice };
 

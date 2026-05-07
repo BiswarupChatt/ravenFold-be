@@ -1,12 +1,10 @@
 import express from 'express';
 
 import analyticsService from '@/modules/analytics/analytics.service.js';
-import { sendSuccess } from '@/common/helpers/response.helper.js';
+import asyncHandler from '@/common/helpers/asyncHandler.helper.js';
 
 const router = express.Router();
 
-router.get('/', (req, res) => {
-  sendSuccess(res, analyticsService.getStatus(), 'Analytics module ready');
-});
+router.get('/', asyncHandler(analyticsService.getStatus));
 
 export default router;

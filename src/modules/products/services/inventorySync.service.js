@@ -1,8 +1,8 @@
-async function syncProductInventory() {
+const syncProductInventory = async () => {
   return {
     synced: false,
   };
-}
+};
 
 export { syncProductInventory };
 

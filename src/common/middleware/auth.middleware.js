@@ -1,7 +1,7 @@
 import ApiError from '@/common/errors/api.error.js';
 import { verifyToken } from '@/common/utils/jwt.util.js';
 
-function getBearerToken(req) {
+const getBearerToken = (req) => {
   const authHeader = req.headers.authorization;
 
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -9,9 +9,9 @@ function getBearerToken(req) {
   }
 
   return authHeader.slice('Bearer '.length);
-}
+};
 
-function normalizeUserFromToken(decodedToken) {
+const normalizeUserFromToken = (decodedToken) => {
   const roles = Array.isArray(decodedToken.roles)
     ? decodedToken.roles
     : [decodedToken.role].filter(Boolean);
@@ -23,9 +23,9 @@ function normalizeUserFromToken(decodedToken) {
     roles,
     tokenPayload: decodedToken,
   };
-}
+};
 
-function authenticateUser(req, res, next) {
+const authenticateUser = (req, res, next) => {
   const token = getBearerToken(req);
 
   if (!token) {
@@ -40,9 +40,9 @@ function authenticateUser(req, res, next) {
     const message = error.name === 'TokenExpiredError' ? 'Authentication token expired' : 'Invalid authentication token';
     return next(new ApiError(401, message));
   }
-}
+};
 
-function authorizeRoles(...allowedRoles) {
+const authorizeRoles = (...allowedRoles) => {
   const roleList = allowedRoles.flat().filter(Boolean);
 
   return (req, res, next) => {
@@ -59,7 +59,7 @@ function authorizeRoles(...allowedRoles) {
 
     return next();
   };
-}
+};
 
 const authorizeUser = authorizeRoles;
 

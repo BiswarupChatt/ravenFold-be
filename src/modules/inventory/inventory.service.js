@@ -1,11 +1,14 @@
-import inventoryRepository from '@/modules/inventory/inventory.repository.js';
+import { sendSuccess } from '@/common/helpers/response.helper.js';
 
-function getStatus() {
+const getStatusData = () => {
   return {
     module: 'inventory',
-    repository: inventoryRepository.name,
   };
-}
+};
+
+const getStatus = async (req, res) => {
+  return sendSuccess(res, getStatusData(), 'Inventory module ready');
+};
 
 export { getStatus };
 

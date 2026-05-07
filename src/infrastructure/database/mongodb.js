@@ -4,7 +4,7 @@ import { mongoUri } from '@/config/db.config.js';
 import { mongoDbName, nodeEnv } from '@/config/env.config.js';
 import logger from '@/common/logger/logger.js';
 
-async function connectMongoDB() {
+const connectMongoDB = async () => {
   if (!mongoUri) {
     logger.info('MongoDB URI not configured. Skipping database connection.');
     return null;
@@ -20,9 +20,9 @@ async function connectMongoDB() {
 
   logger.info(`MongoDB connected to database "${connection.connection.name}".`);
   return connection;
-}
+};
 
-async function disconnectMongoDB() {
+const disconnectMongoDB = async () => {
   if (mongoose.connection.readyState === 0) {
     return null;
   }
@@ -30,7 +30,7 @@ async function disconnectMongoDB() {
   await mongoose.disconnect();
   logger.info('MongoDB disconnected.');
   return null;
-}
+};
 
 export { connectMongoDB, disconnectMongoDB };
 

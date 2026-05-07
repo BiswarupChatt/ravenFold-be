@@ -5,14 +5,14 @@ const scrypt = promisify(scryptCallback);
 const HASH_PREFIX = 'scrypt';
 const KEY_LENGTH = 64;
 
-async function hashPassword(password) {
+const hashPassword = async (password) => {
   const salt = randomBytes(16).toString('hex');
   const derivedKey = await scrypt(password, salt, KEY_LENGTH);
 
   return `${HASH_PREFIX}$${salt}$${derivedKey.toString('hex')}`;
-}
+};
 
-async function verifyPassword(password, storedHash) {
+const verifyPassword = async (password, storedHash) => {
   if (!password || !storedHash) {
     return false;
   }
@@ -32,7 +32,7 @@ async function verifyPassword(password, storedHash) {
   const derivedKey = await scrypt(password, salt, storedKey.length);
 
   return storedKey.length === derivedKey.length && timingSafeEqual(storedKey, derivedKey);
-}
+};
 
 export { hashPassword, verifyPassword };
 

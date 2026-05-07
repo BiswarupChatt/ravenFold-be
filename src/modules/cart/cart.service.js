@@ -1,11 +1,14 @@
-import cartRepository from '@/modules/cart/cart.repository.js';
+import { sendSuccess } from '@/common/helpers/response.helper.js';
 
-function getStatus() {
+const getStatusData = () => {
   return {
     module: 'cart',
-    repository: cartRepository.name,
   };
-}
+};
+
+const getStatus = async (req, res) => {
+  return sendSuccess(res, getStatusData(), 'Cart module ready');
+};
 
 export { getStatus };
 

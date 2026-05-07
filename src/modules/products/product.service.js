@@ -1,11 +1,14 @@
-import productRepository from '@/modules/products/product.repository.js';
+import { sendSuccess } from '@/common/helpers/response.helper.js';
 
-function getStatus() {
+const getStatusData = () => {
   return {
     module: 'products',
-    repository: productRepository.name,
   };
-}
+};
+
+const getStatus = async (req, res) => {
+  return sendSuccess(res, getStatusData(), 'Products module ready');
+};
 
 export { getStatus };
 

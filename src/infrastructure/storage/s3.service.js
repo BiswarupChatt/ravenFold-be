@@ -1,10 +1,10 @@
-async function uploadFile() {
+const uploadFile = async () => {
   throw new Error('S3 upload is not configured yet');
-}
+};
 
-async function deleteFile() {
+const deleteFile = async () => {
   throw new Error('S3 delete is not configured yet');
-}
+};
 
 export { deleteFile, uploadFile };
 

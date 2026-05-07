@@ -2,7 +2,7 @@ import jwt from 'jsonwebtoken';
 
 import { jwtExpiresIn, jwtSecret, nodeEnv } from '@/config/env.config.js';
 
-function getJwtSecret() {
+const getJwtSecret = () => {
   if (jwtSecret) {
     return jwtSecret;
   }
@@ -12,18 +12,18 @@ function getJwtSecret() {
   }
 
   throw new Error('JWT_SECRET is required in production');
-}
+};
 
-function signToken(payload, options = {}) {
+const signToken = (payload, options = {}) => {
   return jwt.sign(payload, getJwtSecret(), {
     expiresIn: jwtExpiresIn,
     ...options,
   });
-}
+};
 
-function verifyToken(token) {
+const verifyToken = (token) => {
   return jwt.verify(token, getJwtSecret());
-}
+};
 
 export { signToken, verifyToken };
 

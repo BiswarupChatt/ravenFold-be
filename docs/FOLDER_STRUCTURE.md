@@ -2,7 +2,7 @@
 
 This document describes the planned JavaScript backend structure for the RavenFold ecommerce API. The original reference structure used TypeScript files, but this project uses native ES modules, so every `.ts` file maps to a `.js` file with `import` and `export` syntax.
 
-The goal is a modular backend where each ecommerce domain owns its own routes, controller, service, repository, validation, model, events, and supporting providers.
+The goal is a modular backend where each ecommerce domain owns its own routes, service, validation, model, events, and supporting providers.
 
 ## Planned JavaScript Structure
 
@@ -194,7 +194,7 @@ Examples:
 - `auth.middleware.js`: verifies JWT and attaches the logged-in user to `req`
 - `admin.middleware.js`: checks admin roles/permissions
 - `rateLimit.middleware.js`: protects sensitive routes from abuse
-- `validate.middleware.js`: runs request validation schemas before controllers
+- `validate.middleware.js`: runs request validation schemas before service handlers
 
 ### `common/utils`
 
@@ -224,7 +224,7 @@ Express and API response helpers.
 Examples:
 
 - `response.helper.js`: standard success response shape
-- `asyncHandler.helper.js`: wraps async controllers and forwards errors to Express
+- `asyncHandler.helper.js`: wraps async route handlers and forwards errors to Express
 
 ## `src/infrastructure`
 
@@ -273,16 +273,14 @@ Examples:
 
 ## `src/modules`
 
-Each module owns one business domain. A module should contain its own route definitions, controller, service, repository, validation, model, events, providers, and DTO/request-shape files where needed.
+Each module owns one business domain. A module should contain its own route definitions, service, validation, model, events, providers, and DTO/request-shape files where needed.
 
 Common module file roles:
 
 | File Pattern | Purpose |
 | --- | --- |
 | `*.routes.js` | Express route definitions for the module. |
-| `*.controller.js` | HTTP layer. Reads request data, calls services, returns responses. |
-| `*.service.js` | Business logic. Coordinates repositories, providers, events, and queues. |
-| `*.repository.js` | Data access layer. Talks to Mongoose models or database clients. |
+| `*.service.js` | Route-facing business logic. Reads request data when used as a handler, coordinates models, providers, events, and queues, and returns responses. |
 | `*.model.js` | Mongoose schema/model or database entity definition. |
 | `*.validation.js` | Request validation schemas, usually Joi or Zod. |
 | `*.events.js` | Event publishers and event handlers for the module. |
@@ -298,9 +296,7 @@ Suggested files:
 
 ```text
 src/modules/auth/
-|-- auth.controller.js
 |-- auth.service.js
-|-- auth.repository.js
 |-- auth.routes.js
 |-- auth.validation.js
 |-- auth.events.js
@@ -322,9 +318,7 @@ Suggested files:
 ```text
 src/modules/users/
 |-- user.model.js
-|-- user.controller.js
 |-- user.service.js
-|-- user.repository.js
 |-- user.routes.js
 |-- user.validation.js
 `-- dto/
@@ -340,9 +334,7 @@ Suggested files:
 src/modules/products/
 |-- product.model.js
 |-- productVariant.model.js
-|-- product.controller.js
 |-- product.service.js
-|-- product.repository.js
 |-- product.routes.js
 |-- product.validation.js
 |-- product.events.js
@@ -364,7 +356,6 @@ Suggested files:
 src/modules/inventory/
 |-- inventory.model.js
 |-- inventory.service.js
-|-- inventory.repository.js
 |-- inventory.events.js
 `-- inventory.routes.js
 ```
@@ -379,7 +370,6 @@ Suggested files:
 src/modules/cart/
 |-- cart.model.js
 |-- cart.service.js
-|-- cart.repository.js
 `-- cart.routes.js
 ```
 
@@ -406,9 +396,7 @@ Suggested files:
 src/modules/orders/
 |-- order.model.js
 |-- orderItem.model.js
-|-- order.controller.js
 |-- order.service.js
-|-- order.repository.js
 |-- order.routes.js
 |-- order.validation.js
 |-- order.events.js
@@ -428,9 +416,7 @@ Suggested files:
 ```text
 src/modules/payments/
 |-- payment.model.js
-|-- payment.controller.js
 |-- payment.service.js
-|-- payment.repository.js
 |-- payment.routes.js
 |-- payment.webhook.js
 |-- payment.validation.js
@@ -546,7 +532,7 @@ Tests should mirror the application structure.
 
 Recommended layout:
 
-- `tests/unit`: isolated service, utility, and repository tests
+- `tests/unit`: isolated service and utility tests
 - `tests/integration`: route + database integration tests
 - `tests/e2e`: full API flows such as register -> login -> add to cart -> checkout
 
@@ -565,13 +551,12 @@ Rules:
 - Use `.js` files, not `.ts`.
 - Use native ES modules while `package.json` has `"type": "module"`.
 - Use `@/` imports for local application files, for example `@/common/errors/api.error.js`.
-- Use kebab-free, domain-first names like `product.service.js`, `order.routes.js`, and `auth.controller.js`.
+- Use kebab-free, domain-first names like `product.service.js`, `order.routes.js`, and `auth.service.js`.
 - Keep route files thin.
-- Keep controllers HTTP-focused.
-- Keep services responsible for business rules.
-- Keep repositories responsible for database access.
+- Keep service files responsible for request handling, business rules, and module-local data access.
 - Keep providers responsible for third-party API integration.
 - Keep shared utilities in `common`, not inside individual modules.
+- Use arrow functions across application code.
 
 ## Recommended Build Order
 

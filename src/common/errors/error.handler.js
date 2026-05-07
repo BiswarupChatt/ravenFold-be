@@ -1,6 +1,6 @@
 import { nodeEnv } from '@/config/env.config.js';
 
-function errorHandler(error, req, res, next) {
+const errorHandler = (error, req, res, next) => {
   if (res.headersSent) {
     return next(error);
   }
@@ -20,6 +20,6 @@ function errorHandler(error, req, res, next) {
   }
 
   return res.status(statusCode).json(response);
-}
+};
 
 export default errorHandler;

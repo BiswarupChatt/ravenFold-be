@@ -1,12 +1,12 @@
 import ApiError from '@/common/errors/api.error.js';
 
-function validate(schema, property = 'body') {
+const validate = (schema, property = 'body') => {
   return (req, res, next) => {
     if (!schema) {
       return next();
     }
 
-    if (typeof schema.validate === 'function') {
+    if (schema.validate instanceof Function) {
       const { error, value } = schema.validate(req[property], { abortEarly: false });
 
       if (error) {
@@ -20,6 +20,6 @@ function validate(schema, property = 'body') {
 
     return next(new ApiError(500, 'Invalid validation schema'));
   };
-}
+};
 
 export default validate;

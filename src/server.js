@@ -4,7 +4,7 @@ import logger from '@/common/logger/logger.js';
 import { connectMongoDB, disconnectMongoDB } from '@/infrastructure/database/mongodb.js';
 import { connectRedis, disconnectRedis } from '@/infrastructure/redis/redis.js';
 
-async function startServer() {
+const startServer = async () => {
   await connectMongoDB();
   await connectRedis();
 
@@ -12,7 +12,7 @@ async function startServer() {
     logger.info(`Server running in ${nodeEnv} mode on port ${port}`);
   });
 
-  async function shutdown(signal) {
+  const shutdown = async (signal) => {
     logger.info(`${signal} received. Closing server.`);
 
     server.close(async () => {
@@ -21,11 +21,11 @@ async function startServer() {
       logger.info('Server closed.');
       process.exit(0);
     });
-  }
+  };
 
   process.on('SIGINT', () => shutdown('SIGINT'));
   process.on('SIGTERM', () => shutdown('SIGTERM'));
-}
+};
 
 startServer().catch((error) => {
   logger.error('Failed to start server', error);

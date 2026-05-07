@@ -48,29 +48,19 @@ const userSchema = new mongoose.Schema(
     timestamps: true,
     versionKey: false,
     toJSON: {
-      transform(doc, ret) {
+      transform: (doc, ret) => {
         delete ret.passwordHash;
         return ret;
       },
     },
     toObject: {
-      transform(doc, ret) {
+      transform: (doc, ret) => {
         delete ret.passwordHash;
         return ret;
       },
     },
   },
 );
-
-userSchema.pre('validate', function syncRoles() {
-  if (!this.role) {
-    this.role = ROLES.CUSTOMER;
-  }
-
-  if (!Array.isArray(this.roles) || this.roles.length === 0) {
-    this.roles = [this.role];
-  }
-});
 
 const User = mongoose.models.User || mongoose.model('User', userSchema);
 

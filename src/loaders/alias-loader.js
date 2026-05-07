@@ -4,7 +4,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 const loaderDir = path.dirname(fileURLToPath(import.meta.url));
 const srcRoot = path.resolve(loaderDir, '..');
 
-export async function resolve(specifier, context, nextResolve) {
+const resolve = async (specifier, context, nextResolve) => {
   if (specifier.startsWith('@/')) {
     const resolvedPath = path.join(srcRoot, specifier.slice(2));
 
@@ -12,4 +12,6 @@ export async function resolve(specifier, context, nextResolve) {
   }
 
   return nextResolve(specifier, context);
-}
+};
+
+export { resolve };

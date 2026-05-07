@@ -1,12 +1,10 @@
 import express from 'express';
 
 import inventoryService from '@/modules/inventory/inventory.service.js';
-import { sendSuccess } from '@/common/helpers/response.helper.js';
+import asyncHandler from '@/common/helpers/asyncHandler.helper.js';
 
 const router = express.Router();
 
-router.get('/', (req, res) => {
-  sendSuccess(res, inventoryService.getStatus(), 'Inventory module ready');
-});
+router.get('/', asyncHandler(inventoryService.getStatus));
 
 export default router;
