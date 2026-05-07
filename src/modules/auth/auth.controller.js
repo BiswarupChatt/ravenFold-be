@@ -6,16 +6,21 @@ async function getStatus(req, res) {
 }
 
 async function login(req, res) {
-  return sendSuccess(res, await authService.login(req.body), 'Login flow not implemented yet');
+  return sendSuccess(res, await authService.login(req.body), 'Login successful');
 }
 
 async function verifyOtp(req, res) {
   return sendSuccess(res, await authService.verifyOtp(req.body), 'OTP verification flow not implemented yet');
 }
 
-export { getStatus, login, verifyOtp };
+async function getMe(req, res) {
+  return sendSuccess(res, authService.getAuthenticatedUser(req.user), 'Authenticated user fetched');
+}
+
+export { getMe, getStatus, login, verifyOtp };
 
 export default {
+  getMe,
   getStatus,
   login,
   verifyOtp,
