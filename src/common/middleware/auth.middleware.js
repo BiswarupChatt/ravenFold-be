@@ -1,4 +1,4 @@
-const ApiError = require('../errors/api.error');
+import ApiError from '@/common/errors/api.error.js';
 
 function authMiddleware(req, res, next) {
   const authHeader = req.headers.authorization;
@@ -11,4 +11,4 @@ function authMiddleware(req, res, next) {
   return next();
 }
 
-module.exports = authMiddleware;
+export default authMiddleware;

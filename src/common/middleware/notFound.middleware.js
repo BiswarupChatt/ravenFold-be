@@ -1,7 +1,7 @@
-const ApiError = require('../errors/api.error');
+import ApiError from '@/common/errors/api.error.js';
 
 function notFound(req, res, next) {
   next(new ApiError(404, `Route not found: ${req.originalUrl}`));
 }
 
-module.exports = notFound;
+export default notFound;

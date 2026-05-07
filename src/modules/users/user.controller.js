@@ -1,10 +1,12 @@
-const userService = require('./user.service');
-const { sendSuccess } = require('../../common/helpers/response.helper');
+import userService from '@/modules/users/user.service.js';
+import { sendSuccess } from '@/common/helpers/response.helper.js';
 
 async function getStatus(req, res) {
   return sendSuccess(res, userService.getStatus(), 'Users module ready');
 }
 
-module.exports = {
+export { getStatus };
+
+export default {
   getStatus,
 };

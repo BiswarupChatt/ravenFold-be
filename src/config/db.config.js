@@ -1,6 +1,8 @@
-const { mongoDbName, mongoUri } = require('./env.config');
+import { mongoDbName, mongoUri } from '@/config/env.config.js';
 
-module.exports = {
+export { mongoDbName, mongoUri };
+
+export default {
   mongoDbName,
   mongoUri,
 };

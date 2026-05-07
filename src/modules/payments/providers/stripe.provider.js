@@ -2,6 +2,8 @@ async function createStripePaymentIntent() {
   throw new Error('Stripe provider is not configured yet');
 }
 
-module.exports = {
+export { createStripePaymentIntent };
+
+export default {
   createStripePaymentIntent,
 };

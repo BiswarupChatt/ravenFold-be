@@ -1,8 +1,8 @@
-const express = require('express');
+import express from 'express';
 
-const adminService = require('./admin.service');
-const dashboardService = require('./dashboard.service');
-const { sendSuccess } = require('../../common/helpers/response.helper');
+import adminService from '@/modules/admin/admin.service.js';
+import dashboardService from '@/modules/admin/dashboard.service.js';
+import { sendSuccess } from '@/common/helpers/response.helper.js';
 
 const router = express.Router();
 
@@ -14,4 +14,4 @@ router.get('/dashboard', (req, res) => {
   sendSuccess(res, dashboardService.getDashboard(), 'Admin dashboard ready');
 });
 
-module.exports = router;
+export default router;

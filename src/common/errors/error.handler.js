@@ -1,4 +1,4 @@
-const { nodeEnv } = require('../../config/env.config');
+import { nodeEnv } from '@/config/env.config.js';
 
 function errorHandler(error, req, res, next) {
   if (res.headersSent) {
@@ -22,4 +22,4 @@ function errorHandler(error, req, res, next) {
   return res.status(statusCode).json(response);
 }
 
-module.exports = errorHandler;
+export default errorHandler;

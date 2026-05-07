@@ -1,4 +1,4 @@
-module.exports = Object.freeze({
+export default Object.freeze({
   INVENTORY_LOW: 'inventory.low',
   ORDER_CREATED: 'order.created',
   ORDER_STATUS_CHANGED: 'order.status_changed',

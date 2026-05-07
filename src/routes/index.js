@@ -1,18 +1,18 @@
-const express = require('express');
+import express from 'express';
 
-const adminRoutes = require('./admin.routes');
-const analyticsRoutes = require('../modules/analytics/analytics.routes');
-const authRoutes = require('../modules/auth/auth.routes');
-const cartRoutes = require('../modules/cart/cart.routes');
-const couponRoutes = require('../modules/coupons/coupon.routes');
-const inventoryRoutes = require('../modules/inventory/inventory.routes');
-const orderRoutes = require('../modules/orders/order.routes');
-const paymentRoutes = require('../modules/payments/payment.routes');
-const productRoutes = require('../modules/products/product.routes');
-const reviewRoutes = require('../modules/reviews/review.routes');
-const shippingRoutes = require('../modules/shipping/shipping.routes');
-const userRoutes = require('../modules/users/user.routes');
-const wishlistRoutes = require('../modules/wishlist/wishlist.routes');
+import adminRoutes from '@/routes/admin.routes.js';
+import analyticsRoutes from '@/modules/analytics/analytics.routes.js';
+import authRoutes from '@/modules/auth/auth.routes.js';
+import cartRoutes from '@/modules/cart/cart.routes.js';
+import couponRoutes from '@/modules/coupons/coupon.routes.js';
+import inventoryRoutes from '@/modules/inventory/inventory.routes.js';
+import orderRoutes from '@/modules/orders/order.routes.js';
+import paymentRoutes from '@/modules/payments/payment.routes.js';
+import productRoutes from '@/modules/products/product.routes.js';
+import reviewRoutes from '@/modules/reviews/review.routes.js';
+import shippingRoutes from '@/modules/shipping/shipping.routes.js';
+import userRoutes from '@/modules/users/user.routes.js';
+import wishlistRoutes from '@/modules/wishlist/wishlist.routes.js';
 
 const router = express.Router();
 
@@ -46,4 +46,4 @@ router.use('/coupons', couponRoutes);
 router.use('/analytics', analyticsRoutes);
 router.use('/admin', adminRoutes);
 
-module.exports = router;
+export default router;

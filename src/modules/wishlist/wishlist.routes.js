@@ -1,7 +1,7 @@
-const express = require('express');
+import express from 'express';
 
-const wishlistService = require('./wishlist.service');
-const { sendSuccess } = require('../../common/helpers/response.helper');
+import wishlistService from '@/modules/wishlist/wishlist.service.js';
+import { sendSuccess } from '@/common/helpers/response.helper.js';
 
 const router = express.Router();
 
@@ -9,4 +9,4 @@ router.get('/', (req, res) => {
   sendSuccess(res, wishlistService.getStatus(), 'Wishlist module ready');
 });
 
-module.exports = router;
+export default router;

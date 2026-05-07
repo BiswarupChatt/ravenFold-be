@@ -1,7 +1,7 @@
-const express = require('express');
+import express from 'express';
 
-const reviewService = require('./review.service');
-const { sendSuccess } = require('../../common/helpers/response.helper');
+import reviewService from '@/modules/reviews/review.service.js';
+import { sendSuccess } from '@/common/helpers/response.helper.js';
 
 const router = express.Router();
 
@@ -9,4 +9,4 @@ router.get('/', (req, res) => {
   sendSuccess(res, reviewService.getStatus(), 'Reviews module ready');
 });
 
-module.exports = router;
+export default router;

@@ -1,6 +1,6 @@
-require('./env.config');
+import '@/config/env.config.js';
 
-module.exports = {
+export default {
   accessKeyId: process.env.AWS_ACCESS_KEY_ID || '',
   secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || '',
   region: process.env.AWS_REGION || 'ap-south-1',

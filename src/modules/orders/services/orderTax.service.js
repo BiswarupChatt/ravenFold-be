@@ -2,6 +2,8 @@ function calculateTax() {
   return 0;
 }
 
-module.exports = {
+export { calculateTax };
+
+export default {
   calculateTax,
 };

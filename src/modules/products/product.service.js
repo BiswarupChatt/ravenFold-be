@@ -1,4 +1,4 @@
-const productRepository = require('./product.repository');
+import productRepository from '@/modules/products/product.repository.js';
 
 function getStatus() {
   return {
@@ -7,6 +7,8 @@ function getStatus() {
   };
 }
 
-module.exports = {
+export { getStatus };
+
+export default {
   getStatus,
 };

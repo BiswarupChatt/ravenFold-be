@@ -15,7 +15,9 @@ const PAYMENT_STATUS = Object.freeze({
   REFUNDED: 'refunded',
 });
 
-module.exports = {
+export { ORDER_STATUS, PAYMENT_STATUS };
+
+export default {
   ORDER_STATUS,
   PAYMENT_STATUS,
 };

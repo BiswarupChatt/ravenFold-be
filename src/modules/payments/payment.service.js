@@ -1,4 +1,4 @@
-const paymentRepository = require('./payment.repository');
+import paymentRepository from '@/modules/payments/payment.repository.js';
 
 function getStatus() {
   return {
@@ -13,7 +13,9 @@ async function handleWebhook(payload) {
   };
 }
 
-module.exports = {
+export { getStatus, handleWebhook };
+
+export default {
   getStatus,
   handleWebhook,
 };

@@ -6,6 +6,8 @@ function createSlug(value) {
     .replace(/^-+|-+$/g, '');
 }
 
-module.exports = {
+export { createSlug };
+
+export default {
   createSlug,
 };

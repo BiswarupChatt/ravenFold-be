@@ -1,10 +1,12 @@
-const productService = require('./product.service');
-const { sendSuccess } = require('../../common/helpers/response.helper');
+import productService from '@/modules/products/product.service.js';
+import { sendSuccess } from '@/common/helpers/response.helper.js';
 
 async function getStatus(req, res) {
   return sendSuccess(res, productService.getStatus(), 'Products module ready');
 }
 
-module.exports = {
+export { getStatus };
+
+export default {
   getStatus,
 };

@@ -6,7 +6,9 @@ function verifyToken() {
   throw new Error('JWT verification is not configured yet');
 }
 
-module.exports = {
+export { signToken, verifyToken };
+
+export default {
   signToken,
   verifyToken,
 };

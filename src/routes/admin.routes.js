@@ -1,3 +1,3 @@
-const adminRoutes = require('../modules/admin/admin.routes');
+import adminRoutes from '@/modules/admin/admin.routes.js';
 
-module.exports = adminRoutes;
+export default adminRoutes;

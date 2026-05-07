@@ -1,11 +1,11 @@
-const express = require('express');
+import express from 'express';
 
-const paymentController = require('./payment.controller');
-const asyncHandler = require('../../common/helpers/asyncHandler.helper');
+import paymentController from '@/modules/payments/payment.controller.js';
+import asyncHandler from '@/common/helpers/asyncHandler.helper.js';
 
 const router = express.Router();
 
 router.get('/', asyncHandler(paymentController.getStatus));
 router.post('/webhook', asyncHandler(paymentController.handleWebhook));
 
-module.exports = router;
+export default router;

@@ -1,7 +1,7 @@
-const express = require('express');
+import express from 'express';
 
-const analyticsService = require('./analytics.service');
-const { sendSuccess } = require('../../common/helpers/response.helper');
+import analyticsService from '@/modules/analytics/analytics.service.js';
+import { sendSuccess } from '@/common/helpers/response.helper.js';
 
 const router = express.Router();
 
@@ -9,4 +9,4 @@ router.get('/', (req, res) => {
   sendSuccess(res, analyticsService.getStatus(), 'Analytics module ready');
 });
 
-module.exports = router;
+export default router;

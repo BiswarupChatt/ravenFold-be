@@ -2,6 +2,8 @@
 
 Modular Node.js and Express.js backend scaffold for the RavenFold ecommerce API.
 
+The codebase uses native ES modules and `@/` imports that resolve to `src/`.
+
 ## Documentation
 
 - [Folder structure](docs/FOLDER_STRUCTURE.md)

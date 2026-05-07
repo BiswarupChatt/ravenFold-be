@@ -6,6 +6,8 @@ function getDashboard() {
   };
 }
 
-module.exports = {
+export { getDashboard };
+
+export default {
   getDashboard,
 };

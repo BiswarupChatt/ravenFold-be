@@ -1,5 +1,5 @@
-const ApiError = require('../errors/api.error');
-const ROLES = require('../constants/roles.constant');
+import ApiError from '@/common/errors/api.error.js';
+import ROLES from '@/common/constants/roles.constant.js';
 
 function adminMiddleware(req, res, next) {
   const role = req.user && req.user.role;
@@ -11,4 +11,4 @@ function adminMiddleware(req, res, next) {
   return next();
 }
 
-module.exports = adminMiddleware;
+export default adminMiddleware;

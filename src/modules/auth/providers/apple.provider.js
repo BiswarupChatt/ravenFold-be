@@ -2,6 +2,8 @@ async function verifyAppleToken() {
   throw new Error('Apple auth provider is not configured yet');
 }
 
-module.exports = {
+export { verifyAppleToken };
+
+export default {
   verifyAppleToken,
 };

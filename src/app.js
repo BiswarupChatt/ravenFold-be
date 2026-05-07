@@ -1,12 +1,12 @@
-const express = require('express');
-const cors = require('cors');
-const helmet = require('helmet');
+import express from 'express';
+import cors from 'cors';
+import helmet from 'helmet';
 
-const { apiPrefix, nodeEnv } = require('./config/env.config');
-const routes = require('./routes');
-const notFound = require('./common/middleware/notFound.middleware');
-const errorHandler = require('./common/errors/error.handler');
-const httpLogger = require('./common/logger/morgan.logger');
+import { apiPrefix, nodeEnv } from '@/config/env.config.js';
+import routes from '@/routes/index.js';
+import notFound from '@/common/middleware/notFound.middleware.js';
+import errorHandler from '@/common/errors/error.handler.js';
+import httpLogger from '@/common/logger/morgan.logger.js';
 
 const app = express();
 
@@ -31,4 +31,4 @@ app.use(apiPrefix, routes);
 app.use(notFound);
 app.use(errorHandler);
 
-module.exports = app;
+export default app;

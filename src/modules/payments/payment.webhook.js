@@ -4,6 +4,8 @@ async function processPaymentWebhook(payload) {
   };
 }
 
-module.exports = {
+export { processPaymentWebhook };
+
+export default {
   processPaymentWebhook,
 };

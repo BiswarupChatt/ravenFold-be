@@ -1,4 +1,4 @@
-const orderRepository = require('./order.repository');
+import orderRepository from '@/modules/orders/order.repository.js';
 
 function getStatus() {
   return {
@@ -7,6 +7,8 @@ function getStatus() {
   };
 }
 
-module.exports = {
+export { getStatus };
+
+export default {
   getStatus,
 };

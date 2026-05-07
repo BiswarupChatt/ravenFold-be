@@ -1,7 +1,7 @@
-const express = require('express');
+import express from 'express';
 
-const inventoryService = require('./inventory.service');
-const { sendSuccess } = require('../../common/helpers/response.helper');
+import inventoryService from '@/modules/inventory/inventory.service.js';
+import { sendSuccess } from '@/common/helpers/response.helper.js';
 
 const router = express.Router();
 
@@ -9,4 +9,4 @@ router.get('/', (req, res) => {
   sendSuccess(res, inventoryService.getStatus(), 'Inventory module ready');
 });
 
-module.exports = router;
+export default router;

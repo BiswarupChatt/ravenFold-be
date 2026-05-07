@@ -1,5 +1,5 @@
-const { mongoUri } = require('../../config/db.config');
-const logger = require('../../common/logger/logger');
+import { mongoUri } from '@/config/db.config.js';
+import logger from '@/common/logger/logger.js';
 
 async function connectMongoDB() {
   if (!mongoUri) {
@@ -15,7 +15,9 @@ async function disconnectMongoDB() {
   return null;
 }
 
-module.exports = {
+export { connectMongoDB, disconnectMongoDB };
+
+export default {
   connectMongoDB,
   disconnectMongoDB,
 };

@@ -1,5 +1,7 @@
-const { redisUrl } = require('./env.config');
+import { redisUrl } from '@/config/env.config.js';
 
-module.exports = {
+export { redisUrl };
+
+export default {
   redisUrl,
 };

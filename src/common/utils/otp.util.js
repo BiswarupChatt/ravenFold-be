@@ -4,6 +4,8 @@ function generateOtp(length = 6) {
   return String(Math.floor(min + Math.random() * (max - min + 1)));
 }
 
-module.exports = {
+export { generateOtp };
+
+export default {
   generateOtp,
 };

@@ -1,7 +1,7 @@
-const express = require('express');
+import express from 'express';
 
-const couponService = require('./coupon.service');
-const { sendSuccess } = require('../../common/helpers/response.helper');
+import couponService from '@/modules/coupons/coupon.service.js';
+import { sendSuccess } from '@/common/helpers/response.helper.js';
 
 const router = express.Router();
 
@@ -9,4 +9,4 @@ router.get('/', (req, res) => {
   sendSuccess(res, couponService.getStatus(), 'Coupons module ready');
 });
 
-module.exports = router;
+export default router;

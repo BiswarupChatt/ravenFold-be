@@ -1,8 +1,11 @@
-const APP_CONSTANTS = Object.freeze({
-  APP_NAME: 'RavenFold',
-  DEFAULT_PAGE: 1,
-  DEFAULT_LIMIT: 20,
-  MAX_LIMIT: 100,
-});
+export const APP_NAME = 'RavenFold';
+export const DEFAULT_PAGE = 1;
+export const DEFAULT_LIMIT = 20;
+export const MAX_LIMIT = 100;
 
-module.exports = APP_CONSTANTS;
+export default Object.freeze({
+  APP_NAME,
+  DEFAULT_LIMIT,
+  DEFAULT_PAGE,
+  MAX_LIMIT,
+});

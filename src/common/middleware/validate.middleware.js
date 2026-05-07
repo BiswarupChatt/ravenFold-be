@@ -1,4 +1,4 @@
-const ApiError = require('../errors/api.error');
+import ApiError from '@/common/errors/api.error.js';
 
 function validate(schema, property = 'body') {
   return (req, res, next) => {
@@ -22,4 +22,4 @@ function validate(schema, property = 'body') {
   };
 }
 
-module.exports = validate;
+export default validate;

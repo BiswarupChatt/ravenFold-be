@@ -6,6 +6,8 @@ function createQueue(name) {
   };
 }
 
-module.exports = {
+export { createQueue };
+
+export default {
   createQueue,
 };

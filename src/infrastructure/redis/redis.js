@@ -1,5 +1,5 @@
-const { redisUrl } = require('../../config/redis.config');
-const logger = require('../../common/logger/logger');
+import { redisUrl } from '@/config/redis.config.js';
+import logger from '@/common/logger/logger.js';
 
 async function connectRedis() {
   if (!redisUrl) {
@@ -15,7 +15,9 @@ async function disconnectRedis() {
   return null;
 }
 
-module.exports = {
+export { connectRedis, disconnectRedis };
+
+export default {
   connectRedis,
   disconnectRedis,
 };

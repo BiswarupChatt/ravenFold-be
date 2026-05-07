@@ -2,6 +2,8 @@ function canTransitionOrderStatus() {
   return false;
 }
 
-module.exports = {
+export { canTransitionOrderStatus };
+
+export default {
   canTransitionOrderStatus,
 };

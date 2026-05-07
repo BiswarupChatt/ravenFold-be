@@ -1,7 +1,7 @@
-const express = require('express');
+import express from 'express';
 
-const cartService = require('./cart.service');
-const { sendSuccess } = require('../../common/helpers/response.helper');
+import cartService from '@/modules/cart/cart.service.js';
+import { sendSuccess } from '@/common/helpers/response.helper.js';
 
 const router = express.Router();
 
@@ -9,4 +9,4 @@ router.get('/', (req, res) => {
   sendSuccess(res, cartService.getStatus(), 'Cart module ready');
 });
 
-module.exports = router;
+export default router;

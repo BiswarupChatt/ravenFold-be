@@ -6,7 +6,9 @@ async function deleteFile() {
   throw new Error('S3 delete is not configured yet');
 }
 
-module.exports = {
+export { deleteFile, uploadFile };
+
+export default {
   deleteFile,
   uploadFile,
 };

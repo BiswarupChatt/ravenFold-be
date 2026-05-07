@@ -7,6 +7,8 @@ function calculateOrderPricing() {
   };
 }
 
-module.exports = {
+export { calculateOrderPricing };
+
+export default {
   calculateOrderPricing,
 };

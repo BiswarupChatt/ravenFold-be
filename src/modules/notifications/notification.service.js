@@ -4,6 +4,8 @@ function getStatus() {
   };
 }
 
-module.exports = {
+export { getStatus };
+
+export default {
   getStatus,
 };

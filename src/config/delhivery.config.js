@@ -1,6 +1,6 @@
-require('./env.config');
+import '@/config/env.config.js';
 
-module.exports = {
+export default {
   baseUrl: process.env.DELHIVERY_BASE_URL || '',
   token: process.env.DELHIVERY_TOKEN || '',
   pickupLocation: process.env.DELHIVERY_PICKUP_LOCATION || '',

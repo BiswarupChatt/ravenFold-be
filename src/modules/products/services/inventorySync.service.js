@@ -4,6 +4,8 @@ async function syncProductInventory() {
   };
 }
 
-module.exports = {
+export { syncProductInventory };
+
+export default {
   syncProductInventory,
 };

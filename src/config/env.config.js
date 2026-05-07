@@ -1,15 +1,25 @@
-require('dotenv').config({ quiet: true });
+import dotenv from 'dotenv';
 
-const env = {
-  nodeEnv: process.env.NODE_ENV || 'development',
-  port: Number(process.env.PORT) || 3000,
-  apiPrefix: process.env.API_PREFIX || '/api',
-  frontendUrl: process.env.FRONTEND_URL || '*',
-  mongoUri: process.env.MONGO_URI || '',
-  mongoDbName: process.env.MONGO_DB_NAME || 'ravenfold',
-  redisUrl: process.env.REDIS_URL || '',
-  jwtSecret: process.env.JWT_SECRET || '',
-  jwtExpiresIn: process.env.JWT_EXPIRES_IN || '7d',
+dotenv.config({ quiet: true });
+
+export const nodeEnv = process.env.NODE_ENV || 'development';
+export const port = Number(process.env.PORT) || 3000;
+export const apiPrefix = process.env.API_PREFIX || '/api';
+export const frontendUrl = process.env.FRONTEND_URL || '*';
+export const mongoUri = process.env.MONGO_URI || '';
+export const mongoDbName = process.env.MONGO_DB_NAME || 'ravenfold';
+export const redisUrl = process.env.REDIS_URL || '';
+export const jwtSecret = process.env.JWT_SECRET || '';
+export const jwtExpiresIn = process.env.JWT_EXPIRES_IN || '7d';
+
+export default {
+  apiPrefix,
+  frontendUrl,
+  jwtExpiresIn,
+  jwtSecret,
+  mongoDbName,
+  mongoUri,
+  nodeEnv,
+  port,
+  redisUrl,
 };
-
-module.exports = env;

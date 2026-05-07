@@ -1,6 +1,6 @@
 ﻿# RavenFold Backend Folder Structure
 
-This document describes the planned JavaScript backend structure for the RavenFold ecommerce API. The original reference structure used TypeScript files, but this project currently uses CommonJS JavaScript, so every `.ts` file maps to a `.js` file.
+This document describes the planned JavaScript backend structure for the RavenFold ecommerce API. The original reference structure used TypeScript files, but this project uses native ES modules, so every `.ts` file maps to a `.js` file with `import` and `export` syntax.
 
 The goal is a modular backend where each ecommerce domain owns its own routes, controller, service, repository, validation, model, events, and supporting providers.
 
@@ -10,6 +10,7 @@ The goal is a modular backend where each ecommerce domain owns its own routes, c
 backend/
 |-- package.json
 |-- package-lock.json
+|-- jsconfig.json
 |-- .env
 |-- .env.example
 |-- .gitignore
@@ -26,6 +27,9 @@ backend/
 `-- src/
     |-- app.js
     |-- server.js
+    |-- loaders/
+    |   |-- alias-loader.js
+    |   `-- alias-register.js
     |-- config/
     |   |-- env.config.js
     |   |-- db.config.js
@@ -100,6 +104,7 @@ backend/
 | Path | Purpose |
 | --- | --- |
 | `package.json` | Project metadata, npm scripts, dependencies, and dev dependencies. |
+| `jsconfig.json` | Editor path mapping for `@/*` imports. |
 | `.env` | Local environment variables. This file should not be committed. |
 | `.env.example` | Safe template showing required environment variable names. |
 | `.gitignore` | Keeps `node_modules`, `.env`, logs, uploads, and build artifacts out of git. |
@@ -131,6 +136,15 @@ Responsibilities:
 - connect to Redis if required
 - start the HTTP server
 - handle graceful shutdown
+
+## `src/loaders`
+
+Node runtime loader support for `@/` imports.
+
+Recommended files:
+
+- `alias-loader.js`: maps `@/` to the `src/` directory
+- `alias-register.js`: registers the loader through Node's `--import` flag
 
 ## `src/config`
 
@@ -549,7 +563,8 @@ Rules:
 ## Naming Rules
 
 - Use `.js` files, not `.ts`.
-- Use CommonJS exports while `package.json` has `"type": "commonjs"`.
+- Use native ES modules while `package.json` has `"type": "module"`.
+- Use `@/` imports for local application files, for example `@/common/errors/api.error.js`.
 - Use kebab-free, domain-first names like `product.service.js`, `order.routes.js`, and `auth.controller.js`.
 - Keep route files thin.
 - Keep controllers HTTP-focused.

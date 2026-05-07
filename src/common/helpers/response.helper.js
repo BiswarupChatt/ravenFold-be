@@ -6,6 +6,8 @@ function sendSuccess(res, data = null, message = 'Success', statusCode = 200) {
   });
 }
 
-module.exports = {
+export { sendSuccess };
+
+export default {
   sendSuccess,
 };

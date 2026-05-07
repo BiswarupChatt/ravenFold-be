@@ -1,7 +1,7 @@
-const express = require('express');
+import express from 'express';
 
-const authController = require('./auth.controller');
-const asyncHandler = require('../../common/helpers/asyncHandler.helper');
+import authController from '@/modules/auth/auth.controller.js';
+import asyncHandler from '@/common/helpers/asyncHandler.helper.js';
 
 const router = express.Router();
 
@@ -9,4 +9,4 @@ router.get('/', asyncHandler(authController.getStatus));
 router.post('/login', asyncHandler(authController.login));
 router.post('/verify-otp', asyncHandler(authController.verifyOtp));
 
-module.exports = router;
+export default router;

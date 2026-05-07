@@ -1,4 +1,4 @@
-module.exports = {
+export default {
   createProductSchema: null,
   updateProductSchema: null,
 };

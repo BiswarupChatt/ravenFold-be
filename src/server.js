@@ -1,8 +1,8 @@
-const app = require('./app');
-const { nodeEnv, port } = require('./config/env.config');
-const logger = require('./common/logger/logger');
-const { connectMongoDB, disconnectMongoDB } = require('./infrastructure/database/mongodb');
-const { connectRedis, disconnectRedis } = require('./infrastructure/redis/redis');
+import app from '@/app.js';
+import { nodeEnv, port } from '@/config/env.config.js';
+import logger from '@/common/logger/logger.js';
+import { connectMongoDB, disconnectMongoDB } from '@/infrastructure/database/mongodb.js';
+import { connectRedis, disconnectRedis } from '@/infrastructure/redis/redis.js';
 
 async function startServer() {
   await connectMongoDB();

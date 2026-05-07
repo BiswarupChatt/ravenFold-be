@@ -1,4 +1,4 @@
-const authRepository = require('./auth.repository');
+import authRepository from '@/modules/auth/auth.repository.js';
 
 function getStatus() {
   return {
@@ -21,7 +21,9 @@ async function verifyOtp(payload) {
   };
 }
 
-module.exports = {
+export { getStatus, login, verifyOtp };
+
+export default {
   getStatus,
   login,
   verifyOtp,

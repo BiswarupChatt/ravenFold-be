@@ -1,4 +1,4 @@
-const cartRepository = require('./cart.repository');
+import cartRepository from '@/modules/cart/cart.repository.js';
 
 function getStatus() {
   return {
@@ -7,6 +7,8 @@ function getStatus() {
   };
 }
 
-module.exports = {
+export { getStatus };
+
+export default {
   getStatus,
 };

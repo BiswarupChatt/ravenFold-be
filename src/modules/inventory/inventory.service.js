@@ -1,4 +1,4 @@
-const inventoryRepository = require('./inventory.repository');
+import inventoryRepository from '@/modules/inventory/inventory.repository.js';
 
 function getStatus() {
   return {
@@ -7,6 +7,8 @@ function getStatus() {
   };
 }
 
-module.exports = {
+export { getStatus };
+
+export default {
   getStatus,
 };

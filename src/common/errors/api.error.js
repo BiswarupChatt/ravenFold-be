@@ -1,4 +1,4 @@
-const AppError = require('./app.error');
+import AppError from '@/common/errors/app.error.js';
 
 class ApiError extends AppError {
   constructor(statusCode, message, details = null) {
@@ -6,4 +6,4 @@ class ApiError extends AppError {
   }
 }
 
-module.exports = ApiError;
+export default ApiError;

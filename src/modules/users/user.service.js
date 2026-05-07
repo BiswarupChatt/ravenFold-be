@@ -1,4 +1,4 @@
-const userRepository = require('./user.repository');
+import userRepository from '@/modules/users/user.repository.js';
 
 function getStatus() {
   return {
@@ -7,6 +7,8 @@ function getStatus() {
   };
 }
 
-module.exports = {
+export { getStatus };
+
+export default {
   getStatus,
 };

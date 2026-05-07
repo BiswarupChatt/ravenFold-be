@@ -6,7 +6,9 @@ function fromPaise(amount) {
   return Number(amount || 0) / 100;
 }
 
-module.exports = {
+export { fromPaise, toPaise };
+
+export default {
   fromPaise,
   toPaise,
 };

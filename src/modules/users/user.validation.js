@@ -1,4 +1,4 @@
-module.exports = {
+export default {
   createUserSchema: null,
   updateUserSchema: null,
 };

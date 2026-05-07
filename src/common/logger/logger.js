@@ -16,7 +16,9 @@ function error(message, meta) {
   console.error(message);
 }
 
-module.exports = {
+export { error, info };
+
+export default {
   error,
   info,
 };

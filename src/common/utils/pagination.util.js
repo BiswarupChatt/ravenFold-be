@@ -1,4 +1,4 @@
-const { DEFAULT_LIMIT, DEFAULT_PAGE, MAX_LIMIT } = require('../constants/app.constant');
+import { DEFAULT_LIMIT, DEFAULT_PAGE, MAX_LIMIT } from '@/common/constants/app.constant.js';
 
 function getPagination(query = {}) {
   const page = Math.max(Number(query.page) || DEFAULT_PAGE, 1);
@@ -12,6 +12,8 @@ function getPagination(query = {}) {
   };
 }
 
-module.exports = {
+export { getPagination };
+
+export default {
   getPagination,
 };

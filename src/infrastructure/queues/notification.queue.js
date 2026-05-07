@@ -1,3 +1,3 @@
-const { createQueue } = require('./bullmq');
+import { createQueue } from '@/infrastructure/queues/bullmq.js';
 
-module.exports = createQueue('notification');
+export default createQueue('notification');

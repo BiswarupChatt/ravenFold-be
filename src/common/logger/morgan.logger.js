@@ -1,4 +1,4 @@
-const morgan = require('morgan');
-const { nodeEnv } = require('../../config/env.config');
+import morgan from 'morgan';
+import { nodeEnv } from '@/config/env.config.js';
 
-module.exports = morgan(nodeEnv === 'production' ? 'combined' : 'dev');
+export default morgan(nodeEnv === 'production' ? 'combined' : 'dev');

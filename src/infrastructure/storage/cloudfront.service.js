@@ -2,6 +2,8 @@ function getPublicUrl(path) {
   return path;
 }
 
-module.exports = {
+export { getPublicUrl };
+
+export default {
   getPublicUrl,
 };

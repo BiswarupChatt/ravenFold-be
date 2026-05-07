@@ -1,5 +1,5 @@
-const authService = require('./auth.service');
-const { sendSuccess } = require('../../common/helpers/response.helper');
+import authService from '@/modules/auth/auth.service.js';
+import { sendSuccess } from '@/common/helpers/response.helper.js';
 
 async function getStatus(req, res) {
   return sendSuccess(res, authService.getStatus(), 'Auth module ready');
@@ -13,7 +13,9 @@ async function verifyOtp(req, res) {
   return sendSuccess(res, await authService.verifyOtp(req.body), 'OTP verification flow not implemented yet');
 }
 
-module.exports = {
+export { getStatus, login, verifyOtp };
+
+export default {
   getStatus,
   login,
   verifyOtp,

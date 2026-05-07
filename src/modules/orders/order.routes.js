@@ -1,10 +1,10 @@
-const express = require('express');
+import express from 'express';
 
-const orderController = require('./order.controller');
-const asyncHandler = require('../../common/helpers/asyncHandler.helper');
+import orderController from '@/modules/orders/order.controller.js';
+import asyncHandler from '@/common/helpers/asyncHandler.helper.js';
 
 const router = express.Router();
 
 router.get('/', asyncHandler(orderController.getStatus));
 
-module.exports = router;
+export default router;
