@@ -11,7 +11,7 @@ export const mongoDbName = process.env.MONGO_DB_NAME || 'ravenfold';
 export const redisUrl = process.env.REDIS_URL || '';
 export const jwtSecret = process.env.JWT_SECRET || '';
 export const jwtExpiresIn = process.env.JWT_EXPIRES_IN || '7d';
-export const googleClientIds = ( process.env.GOOGLE_CLIENT_ID || '')
+export const googleClientIds = (process.env.GOOGLE_CLIENT_IDS || process.env.GOOGLE_CLIENT_ID || '')
   .split(',')
   .map((clientId) => clientId.trim())
   .filter(Boolean);

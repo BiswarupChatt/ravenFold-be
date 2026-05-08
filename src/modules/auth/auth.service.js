@@ -224,8 +224,11 @@ const verifyOtpPayload = async (payload) => {
   };
 };
 
-const getGoogleIdToken = (payload) => {
-  return payload?.idToken || payload?.credential || payload?.token;
+const getGoogleAuthToken = (payload) => {
+  return {
+    accessToken: payload?.accessToken,
+    idToken: payload?.idToken || payload?.credential || payload?.token,
+  };
 };
 
 const getFacebookAccessToken = (payload) => {
@@ -295,7 +298,7 @@ const verifyOtp = async (req, res) => {
 };
 
 const googleAuth = async (req, res) => {
-  const providerProfile = await verifyGoogleToken(getGoogleIdToken(req.body));
+  const providerProfile = await verifyGoogleToken(getGoogleAuthToken(req.body));
 
   return sendSuccess(res, await authenticateProviderUser(providerProfile), 'Google authentication successful');
 };
