@@ -226,8 +226,8 @@ const verifyOtpPayload = async (payload) => {
 
 const getGoogleAuthToken = (payload) => {
   return {
-    accessToken: payload?.accessToken,
-    idToken: payload?.idToken || payload?.credential || payload?.token,
+    accessToken: payload?.accessToken || payload?.token,
+    idToken: payload?.idToken || payload?.credential,
   };
 };
 
