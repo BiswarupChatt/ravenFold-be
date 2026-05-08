@@ -23,10 +23,51 @@ const userSchema = new mongoose.Schema(
       trim: true,
       default: '',
     },
+    avatar: {
+      type: String,
+      trim: true,
+      default: '',
+    },
     passwordHash: {
       type: String,
-      required: true,
       select: false,
+    },
+    authProviders: {
+      type: [
+        {
+          provider: {
+            type: String,
+            required: true,
+            enum: ['google', 'facebook', 'apple'],
+          },
+          providerUserId: {
+            type: String,
+            required: true,
+            trim: true,
+          },
+          email: {
+            type: String,
+            lowercase: true,
+            trim: true,
+            default: '',
+          },
+          name: {
+            type: String,
+            trim: true,
+            default: '',
+          },
+          avatar: {
+            type: String,
+            trim: true,
+            default: '',
+          },
+          linkedAt: {
+            type: Date,
+            default: Date.now,
+          },
+        },
+      ],
+      default: [],
     },
     role: {
       type: String,
@@ -59,6 +100,17 @@ const userSchema = new mongoose.Schema(
         return ret;
       },
     },
+  },
+);
+
+userSchema.index(
+  {
+    'authProviders.provider': 1,
+    'authProviders.providerUserId': 1,
+  },
+  {
+    sparse: true,
+    unique: true,
   },
 );
 

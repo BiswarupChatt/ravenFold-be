@@ -7,6 +7,8 @@ import { nodeEnv } from '@/config/env.config.js';
 import { sendSuccess } from '@/common/helpers/response.helper.js';
 import { signToken } from '@/common/utils/jwt.util.js';
 import { hashPassword, verifyPassword } from '@/common/utils/password.util.js';
+import { verifyFacebookToken } from '@/modules/auth/providers/facebook.provider.js';
+import { verifyGoogleToken } from '@/modules/auth/providers/google.provider.js';
 
 const allowedRoles = Object.values(ROLES);
 
@@ -53,9 +55,11 @@ const formatUser = (user) => {
     id: user.id || user._id?.toString(),
     name: user.name,
     email: user.email,
+    avatar: user.avatar,
     phone: user.phone,
     role: user.role,
     roles: user.roles || [user.role],
+    authProviders: user.authProviders?.map((account) => account.provider) || [],
   };
 };
 
@@ -98,6 +102,67 @@ const findUserByEmail = async (email, options = {}) => {
   }
 
   return query.exec();
+};
+
+const findUserByProvider = async (provider, providerUserId) => {
+  assertDatabaseReady();
+
+  return User.findOne({
+    authProviders: {
+      $elemMatch: {
+        provider,
+        providerUserId,
+      },
+    },
+  }).exec();
+};
+
+const buildProviderAccount = (providerProfile) => {
+  return {
+    avatar: providerProfile.avatar || '',
+    email: providerProfile.email || '',
+    linkedAt: new Date(),
+    name: providerProfile.name || '',
+    provider: providerProfile.provider,
+    providerUserId: providerProfile.providerUserId,
+  };
+};
+
+const hasProviderAccount = (user, providerProfile) => {
+  return Boolean(
+    user.authProviders?.some((account) => {
+      return account.provider === providerProfile.provider && account.providerUserId === providerProfile.providerUserId;
+    }),
+  );
+};
+
+const linkProviderAccount = async (user, providerProfile) => {
+  if (!hasProviderAccount(user, providerProfile)) {
+    user.authProviders = [...(user.authProviders || []), buildProviderAccount(providerProfile)];
+  }
+
+  if (!user.name && providerProfile.name) {
+    user.name = providerProfile.name;
+  }
+
+  if (!user.avatar && providerProfile.avatar) {
+    user.avatar = providerProfile.avatar;
+  }
+
+  return user.save();
+};
+
+const createProviderUser = async (providerProfile) => {
+  const role = ROLES.CUSTOMER;
+
+  return createUser({
+    authProviders: [buildProviderAccount(providerProfile)],
+    avatar: providerProfile.avatar || '',
+    email: providerProfile.email,
+    name: providerProfile.name || '',
+    role,
+    roles: [role],
+  });
 };
 
 const getStatusData = () => {
@@ -159,6 +224,47 @@ const verifyOtpPayload = async (payload) => {
   };
 };
 
+const getGoogleIdToken = (payload) => {
+  return payload?.idToken || payload?.credential || payload?.token;
+};
+
+const getFacebookAccessToken = (payload) => {
+  return payload?.accessToken || payload?.token;
+};
+
+const authenticateProviderUser = async (providerProfile) => {
+  if (!providerProfile?.email || !providerProfile.emailVerified) {
+    throw new ApiError(401, 'Provider account must include a verified email');
+  }
+
+  const providerUser = await findUserByProvider(providerProfile.provider, providerProfile.providerUserId);
+
+  if (providerUser) {
+    return {
+      ...createAuthResponse(providerUser),
+      isNewUser: false,
+    };
+  }
+
+  const emailUser = await findUserByEmail(providerProfile.email);
+
+  if (emailUser) {
+    const linkedUser = await linkProviderAccount(emailUser, providerProfile);
+
+    return {
+      ...createAuthResponse(linkedUser),
+      isNewUser: false,
+    };
+  }
+
+  const user = await createProviderUser(providerProfile);
+
+  return {
+    ...createAuthResponse(user),
+    isNewUser: true,
+  };
+};
+
 const getAuthenticatedUser = (user) => {
   if (!user) {
     throw new ApiError(401, 'Authentication required');
@@ -188,16 +294,44 @@ const verifyOtp = async (req, res) => {
   return sendSuccess(res, await verifyOtpPayload(req.body), 'OTP verification flow not implemented yet');
 };
 
+const googleAuth = async (req, res) => {
+  const providerProfile = await verifyGoogleToken(getGoogleIdToken(req.body));
+
+  return sendSuccess(res, await authenticateProviderUser(providerProfile), 'Google authentication successful');
+};
+
+const facebookAuth = async (req, res) => {
+  const providerProfile = await verifyFacebookToken(getFacebookAccessToken(req.body));
+
+  return sendSuccess(res, await authenticateProviderUser(providerProfile), 'Facebook authentication successful');
+};
+
 const getMe = async (req, res) => {
   return sendSuccess(res, getAuthenticatedUser(req.user), 'Authenticated user fetched');
 };
 
-export { getAuthenticatedUser, getMe, getStatus, login, loginUser, register, registerUser, verifyOtp, verifyOtpPayload };
-
-export default {
+export {
+  authenticateProviderUser,
+  facebookAuth,
   getAuthenticatedUser,
   getMe,
   getStatus,
+  googleAuth,
+  login,
+  loginUser,
+  register,
+  registerUser,
+  verifyOtp,
+  verifyOtpPayload,
+};
+
+export default {
+  authenticateProviderUser,
+  facebookAuth,
+  getAuthenticatedUser,
+  getMe,
+  getStatus,
+  googleAuth,
   login,
   loginUser,
   register,
