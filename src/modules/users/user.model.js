@@ -28,6 +28,16 @@ const userSchema = new mongoose.Schema(
       trim: true,
       default: '',
     },
+    gender: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+    dob: {
+      type: String,
+      trim: true,
+      default: '',
+    },
     passwordHash: {
       type: String,
       select: false,
@@ -82,6 +92,10 @@ const userSchema = new mongoose.Schema(
         },
       ],
       default: [ROLES.CUSTOMER],
+    },
+    isActive: {
+      type: Boolean,
+      default: true,
     },
   },
   {

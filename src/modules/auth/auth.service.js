@@ -9,6 +9,7 @@ import { signToken } from '@/common/utils/jwt.util.js';
 import { hashPassword, verifyPassword } from '@/common/utils/password.util.js';
 import { verifyFacebookToken } from '@/modules/auth/providers/facebook.provider.js';
 import { verifyGoogleToken } from '@/modules/auth/providers/google.provider.js';
+import { formatUserProfile, getCurrentUserProfile } from '@/modules/users/user.service.js';
 
 const allowedRoles = Object.values(ROLES);
 
@@ -50,18 +51,7 @@ const getRegistrationRole = (role) => {
   return role;
 };
 
-const formatUser = (user) => {
-  return {
-    id: user.id || user._id?.toString(),
-    name: user.name,
-    email: user.email,
-    avatar: user.avatar,
-    phone: user.phone,
-    role: user.role,
-    roles: user.roles || [user.role],
-    authProviders: user.authProviders?.map((account) => account.provider) || [],
-  };
-};
+const formatUser = formatUserProfile;
 
 const createAuthResponse = (user) => {
   const formattedUser = formatUser(user);
@@ -310,7 +300,7 @@ const facebookAuth = async (req, res) => {
 };
 
 const getMe = async (req, res) => {
-  return sendSuccess(res, getAuthenticatedUser(req.user), 'Authenticated user fetched');
+  return sendSuccess(res, await getCurrentUserProfile(req.user), 'Authenticated user fetched');
 };
 
 export {
