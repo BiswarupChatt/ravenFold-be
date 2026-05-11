@@ -3,6 +3,7 @@ import mongoose from 'mongoose';
 import ROLES from '@/common/constants/roles.constant.js';
 
 const allowedRoles = Object.values(ROLES);
+const allowedAuthProviders = ['google', 'facebook', 'apple', 'firebase'];
 
 const userSchema = new mongoose.Schema(
   {
@@ -48,7 +49,7 @@ const userSchema = new mongoose.Schema(
           provider: {
             type: String,
             required: true,
-            enum: ['google', 'facebook', 'apple'],
+            enum: allowedAuthProviders,
           },
           providerUserId: {
             type: String,
