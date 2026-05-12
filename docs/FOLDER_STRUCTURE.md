@@ -82,8 +82,6 @@ backend/
     |-- modules/
     |   |-- auth/
     |   |-- users/
-    |   |-- products/
-    |   |-- inventory/
     |   |-- cart/
     |   |-- wishlist/
     |   |-- orders/
@@ -255,7 +253,7 @@ Examples:
 
 ### `infrastructure/storage`
 
-File and media storage services.
+File storage services.
 
 Examples:
 
@@ -269,7 +267,7 @@ Internal application events.
 Examples:
 
 - `eventBus.js`: central event emitter or pub/sub adapter
-- `events.js`: shared event names such as `ORDER_CREATED`, `PAYMENT_CAPTURED`, `INVENTORY_LOW`
+- `events.js`: shared event names such as `ORDER_CREATED` and `PAYMENT_CAPTURED`
 
 ## `src/modules`
 
@@ -324,42 +322,6 @@ src/modules/users/
 `-- dto/
 ```
 
-### Products Module
-
-Handles products, variants, images, categories, product search, and catalog management.
-
-Suggested files:
-
-```text
-src/modules/products/
-|-- product.model.js
-|-- productVariant.model.js
-|-- product.service.js
-|-- product.routes.js
-|-- product.validation.js
-|-- product.events.js
-|-- dto/
-|   |-- createProduct.dto.js
-|   `-- updateProduct.dto.js
-`-- services/
-    |-- pricing.service.js
-    `-- inventorySync.service.js
-```
-
-### Inventory Module
-
-Tracks stock levels, reservations, restocks, low-stock events, and inventory movements.
-
-Suggested files:
-
-```text
-src/modules/inventory/
-|-- inventory.model.js
-|-- inventory.service.js
-|-- inventory.events.js
-`-- inventory.routes.js
-```
-
 ### Cart Module
 
 Handles cart creation, item add/remove/update, cart totals, and guest/authenticated cart behavior.
@@ -375,7 +337,7 @@ src/modules/cart/
 
 ### Wishlist Module
 
-Handles customer saved products.
+Handles customer saved items.
 
 Suggested files:
 
@@ -441,7 +403,7 @@ src/modules/shipping/
 
 ### Reviews Module
 
-Handles product reviews, ratings, moderation, and review validation.
+Handles customer reviews, moderation, and review validation.
 
 Suggested files:
 
@@ -483,7 +445,7 @@ src/modules/notifications/
 
 ### Analytics Module
 
-Handles admin-facing reporting, sales metrics, product metrics, and operational analytics.
+Handles admin-facing reporting, sales metrics, and operational analytics.
 
 Suggested files:
 
@@ -521,7 +483,6 @@ Example responsibility:
 ```js
 router.use('/auth', authRoutes);
 router.use('/users', userRoutes);
-router.use('/products', productRoutes);
 router.use('/cart', cartRoutes);
 router.use('/orders', orderRoutes);
 ```
@@ -551,7 +512,7 @@ Rules:
 - Use `.js` files, not `.ts`.
 - Use native ES modules while `package.json` has `"type": "module"`.
 - Use `@/` imports for local application files, for example `@/common/errors/api.error.js`.
-- Use kebab-free, domain-first names like `product.service.js`, `order.routes.js`, and `auth.service.js`.
+- Use kebab-free, domain-first names like `user.service.js`, `order.routes.js`, and `auth.service.js`.
 - Keep route files thin.
 - Keep service files responsible for request handling, business rules, and module-local data access.
 - Keep providers responsible for third-party API integration.
@@ -563,12 +524,11 @@ Rules:
 1. Stabilize base app structure: `app.js`, env config, global error handling, response helper, async handler.
 2. Add database connection and user model.
 3. Build auth and users.
-4. Build products and inventory.
-5. Build cart and wishlist.
-6. Build orders.
-7. Build payments and webhooks.
-8. Build shipping.
-9. Build reviews, coupons, notifications, analytics, and admin dashboard.
-10. Add tests around each module as it becomes functional.
+4. Build cart and wishlist.
+5. Build orders.
+6. Build payments and webhooks.
+7. Build shipping.
+8. Build reviews, coupons, notifications, analytics, and admin dashboard.
+9. Add tests around each module as it becomes functional.
 
 

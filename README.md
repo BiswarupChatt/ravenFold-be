@@ -26,12 +26,6 @@ npm test
 - `POST /api/auth/login` - Login with email and password
 - `POST /api/auth/google` - Login or signup with a Google ID token
 - `POST /api/auth/facebook` - Login or signup with a Facebook access token
-- `GET /api/products/status` - Products module status
-- `GET /api/products` - List products
-- `GET /api/products/:identifier` - Get a product by ID or slug
-- `POST /api/products` - Create a product (admin)
-- `PATCH /api/products/:productId` - Update a product (admin)
-- `DELETE /api/products/:productId` - Soft delete a product (admin)
 - `GET /api/admin/dashboard` - Admin dashboard module status
 
 ## Social auth
