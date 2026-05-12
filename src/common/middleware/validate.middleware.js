@@ -1,5 +1,19 @@
 import ApiError from '@/common/errors/api.error.js';
 
+const setValidatedValue = (req, property, value) => {
+  if (property === 'query') {
+    Object.defineProperty(req, property, {
+      configurable: true,
+      enumerable: true,
+      value,
+      writable: true,
+    });
+    return;
+  }
+
+  req[property] = value;
+};
+
 const validate = (schema, property = 'body') => {
   return (req, res, next) => {
     if (!schema) {
@@ -14,7 +28,7 @@ const validate = (schema, property = 'body') => {
         return next(new ApiError(400, 'Validation failed', details));
       }
 
-      req[property] = value;
+      setValidatedValue(req, property, value);
       return next();
     }
 
