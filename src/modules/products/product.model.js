@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 
 const PRODUCT_STATUSES = Object.freeze({
   ACTIVE: 'active',
+  INACTIVE: 'inactive',
   ARCHIVED: 'archived',
   DRAFT: 'draft',
 });
