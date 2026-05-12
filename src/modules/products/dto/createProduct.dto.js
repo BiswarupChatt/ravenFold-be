@@ -1,4 +1,5 @@
 export default {
+  brandId: 'objectId',
   categoryIds: ['objectId'],
   description: 'string',
   hasVariants: 'boolean',
@@ -18,6 +19,7 @@ export default {
   shortDescription: 'string',
   slug: 'string',
   status: 'draft | active | archived',
+  tagIds: ['objectId'],
   tags: ['string'],
   thumbnail: 'objectId',
   title: 'string',
