@@ -1,16 +1,16 @@
 import express from 'express';
 
 import adminRoutes from '@/routes/admin.routes.js';
-import analyticsRoutes from '@/modules/analytics/analytics.routes.js';
-import authRoutes from '@/modules/auth/auth.routes.js';
-import cartRoutes from '@/modules/cart/cart.routes.js';
-import couponRoutes from '@/modules/coupons/coupon.routes.js';
-import orderRoutes from '@/modules/orders/order.routes.js';
-import paymentRoutes from '@/modules/payments/payment.routes.js';
-import reviewRoutes from '@/modules/reviews/review.routes.js';
-import shippingRoutes from '@/modules/shipping/shipping.routes.js';
-import userRoutes from '@/modules/users/user.routes.js';
-import wishlistRoutes from '@/modules/wishlist/wishlist.routes.js';
+import analyticsRoutes from '@/modules/analytics/routes/analytics.routes.js';
+import authRoutes from '@/modules/auth/routes/auth.routes.js';
+import cartRoutes from '@/modules/cart/routes/cart.routes.js';
+import couponRoutes from '@/modules/coupon/routes/coupon.routes.js';
+import orderRoutes from '@/modules/order/routes/order.routes.js';
+import paymentRoutes from '@/modules/payment/routes/payment.routes.js';
+import reviewRoutes from '@/modules/review/routes/review.routes.js';
+import shippingRoutes from '@/modules/shipping/routes/shipping.routes.js';
+import userRoutes from '@/modules/users/routes/user.routes.js';
+import wishlistRoutes from '@/modules/wishlist/routes/wishlist.routes.js';
 
 const router = express.Router();
 

@@ -2,14 +2,14 @@ import mongoose from 'mongoose';
 
 import ApiError from '@/common/errors/api.error.js';
 import ROLES from '@/common/constants/roles.constant.js';
-import User from '@/modules/users/user.model.js';
+import User from '@/modules/users/models/user.model.js';
 import { nodeEnv } from '@/config/env.config.js';
 import { sendSuccess } from '@/common/helpers/response.helper.js';
 import { signToken } from '@/common/utils/jwt.util.js';
 import { hashPassword, verifyPassword } from '@/common/utils/password.util.js';
 import { verifyFacebookToken } from '@/modules/auth/providers/facebook.provider.js';
 import { verifyGoogleToken } from '@/modules/auth/providers/google.provider.js';
-import { formatUserProfile, getCurrentUserProfile } from '@/modules/users/user.service.js';
+import { formatUserProfile, getCurrentUserProfile } from '@/modules/users/services/user.service.js';
 
 const allowedRoles = Object.values(ROLES);
 

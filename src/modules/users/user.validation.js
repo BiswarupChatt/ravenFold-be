@@ -1,4 +1,1 @@
-export default {
-  createUserSchema: null,
-  updateUserSchema: null,
-};
+export { default } from '@/modules/users/validators/user.validator.js';
