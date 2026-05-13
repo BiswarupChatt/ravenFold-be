@@ -1,534 +1,367 @@
-﻿# RavenFold Backend Folder Structure
+# RavenFold Backend Folder Structure
 
-This document describes the planned JavaScript backend structure for the RavenFold ecommerce API. The original reference structure used TypeScript files, but this project uses native ES modules, so every `.ts` file maps to a `.js` file with `import` and `export` syntax.
+This backend uses Node.js, Express, native ES modules, and `@/` imports that resolve to `src/`.
 
-The goal is a modular backend where each ecommerce domain owns its own routes, service, validation, model, events, and supporting providers.
-
-## Planned JavaScript Structure
+The module structure is being moved from flat module files to a layered domain layout:
 
 ```text
-backend/
+src/modules/<domain>/
+|-- controllers/
+|-- services/
+|-- routes/
+|-- models/
+`-- validators/
+```
+
+New code should import from the layered folders, not from the old flat module files.
+
+## Top-Level Layout
+
+```text
+ravenFold-be/
 |-- package.json
 |-- package-lock.json
 |-- jsconfig.json
-|-- .env
-|-- .env.example
-|-- .gitignore
+|-- index.js
 |-- README.md
 |-- docker-compose.yml
 |-- docs/
 |   |-- FOLDER_STRUCTURE.md
 |   `-- swagger.js
-|-- tests/
-|   |-- unit/
-|   |-- integration/
-|   `-- e2e/
 |-- uploads/
 `-- src/
     |-- app.js
     |-- server.js
+    |-- routes/
+    |   |-- index.js
+    |   `-- admin.routes.js
     |-- loaders/
     |   |-- alias-loader.js
     |   `-- alias-register.js
     |-- config/
-    |   |-- env.config.js
-    |   |-- db.config.js
-    |   |-- redis.config.js
-    |   |-- razorpay.config.js
-    |   |-- aws.config.js
-    |   `-- delhivery.config.js
     |-- common/
-    |   |-- constants/
-    |   |   |-- roles.constant.js
-    |   |   |-- order.constant.js
-    |   |   `-- app.constant.js
-    |   |-- errors/
-    |   |   |-- app.error.js
-    |   |   |-- api.error.js
-    |   |   `-- error.handler.js
-    |   |-- middleware/
-    |   |   |-- auth.middleware.js
-    |   |   |-- admin.middleware.js
-    |   |   |-- rateLimit.middleware.js
-    |   |   `-- validate.middleware.js
-    |   |-- utils/
-    |   |   |-- jwt.util.js
-    |   |   |-- otp.util.js
-    |   |   |-- pagination.util.js
-    |   |   |-- slug.util.js
-    |   |   `-- price.util.js
-    |   |-- logger/
-    |   |   |-- logger.js
-    |   |   `-- morgan.logger.js
-    |   `-- helpers/
-    |       |-- response.helper.js
-    |       `-- asyncHandler.helper.js
     |-- infrastructure/
-    |   |-- database/
-    |   |   `-- mongodb.js
-    |   |-- redis/
-    |   |   `-- redis.js
-    |   |-- queues/
-    |   |   |-- bullmq.js
-    |   |   |-- email.queue.js
-    |   |   |-- notification.queue.js
-    |   |   `-- order.queue.js
-    |   |-- storage/
-    |   |   |-- s3.service.js
-    |   |   `-- cloudfront.service.js
-    |   `-- events/
-    |       |-- eventBus.js
-    |       `-- events.js
-    |-- modules/
-    |   |-- auth/
-    |   |-- users/
-    |   |-- cart/
-    |   |-- wishlist/
-    |   |-- orders/
-    |   |-- payments/
-    |   |-- shipping/
-    |   |-- reviews/
-    |   |-- coupons/
-    |   |-- notifications/
-    |   |-- analytics/
-    |   `-- admin/
-    `-- routes/
-        |-- index.js
-        `-- admin.routes.js
+    `-- modules/
 ```
 
-## Root Files
+## Route Composition
 
-| Path | Purpose |
-| --- | --- |
-| `package.json` | Project metadata, npm scripts, dependencies, and dev dependencies. |
-| `jsconfig.json` | Editor path mapping for `@/*` imports. |
-| `.env` | Local environment variables. This file should not be committed. |
-| `.env.example` | Safe template showing required environment variable names. |
-| `.gitignore` | Keeps `node_modules`, `.env`, logs, uploads, and build artifacts out of git. |
-| `docker-compose.yml` | Local service orchestration, usually for MongoDB, Redis, and supporting services. |
-| `README.md` | Project overview, setup commands, scripts, and links to documentation. |
-
-## `src/app.js`
-
-`src/app.js` owns Express app configuration:
-
-- create the Express app
-- register security middleware such as `helmet`
-- register CORS
-- register JSON/body parsers
-- register request logging
-- mount API routes
-- mount not-found and error handlers
-
-It should not open the network port. That responsibility belongs to `src/server.js`.
-
-## `src/server.js`
-
-Process entry point used by the npm scripts.
-
-Responsibilities:
-
-- load environment variables
-- connect to MongoDB
-- connect to Redis if required
-- start the HTTP server
-- handle graceful shutdown
-
-## `src/loaders`
-
-Node runtime loader support for `@/` imports.
-
-Recommended files:
-
-- `alias-loader.js`: maps `@/` to the `src/` directory
-- `alias-register.js`: registers the loader through Node's `--import` flag
-
-## `src/config`
-
-Configuration files convert environment variables into clean config objects that the rest of the app can import.
-
-Recommended files:
-
-- `env.config.js`: reads and validates base env values like `NODE_ENV`, `PORT`, JWT secrets, frontend URL, and API base URL
-- `db.config.js`: MongoDB URI, database name, connection options
-- `redis.config.js`: Redis host, port, password, TLS settings
-- `razorpay.config.js`: Razorpay key ID, key secret, webhook secret
-- `aws.config.js`: AWS region, S3 bucket, access keys, CloudFront domain
-- `delhivery.config.js`: Delhivery base URL, token, warehouse/pickup config
-
-Rule: application code should not read `process.env` directly outside config files.
-
-## `src/common`
-
-Shared code used across multiple modules.
-
-### `common/constants`
-
-Project-wide constants that should not be duplicated inside modules.
-
-Examples:
-
-- `roles.constant.js`: `CUSTOMER`, `ADMIN`, `SUPER_ADMIN`
-- `order.constant.js`: order statuses, payment statuses, shipment statuses
-- `app.constant.js`: common limits, default pagination values, app names
-
-### `common/errors`
-
-Reusable error classes and centralized error handling.
-
-Examples:
-
-- `app.error.js`: base application error class
-- `api.error.js`: HTTP-aware errors with status codes
-- `error.handler.js`: Express error middleware
-
-### `common/middleware`
-
-Express middleware shared by many routes.
-
-Examples:
-
-- `auth.middleware.js`: verifies JWT and attaches the logged-in user to `req`
-- `admin.middleware.js`: checks admin roles/permissions
-- `rateLimit.middleware.js`: protects sensitive routes from abuse
-- `validate.middleware.js`: runs request validation schemas before service handlers
-
-### `common/utils`
-
-Small pure helpers that do not depend on Express.
-
-Examples:
-
-- `jwt.util.js`: sign and verify JWTs
-- `otp.util.js`: generate and verify OTPs
-- `pagination.util.js`: build skip/limit/page metadata
-- `slug.util.js`: generate SEO-friendly slugs
-- `price.util.js`: currency and price calculations
-
-### `common/logger`
-
-Logging setup.
-
-Examples:
-
-- `logger.js`: app logger, usually Winston or Pino
-- `morgan.logger.js`: HTTP request logger integration
-
-### `common/helpers`
-
-Express and API response helpers.
-
-Examples:
-
-- `response.helper.js`: standard success response shape
-- `asyncHandler.helper.js`: wraps async route handlers and forwards errors to Express
-
-## `src/infrastructure`
-
-Infrastructure code integrates with databases, queues, storage, and event systems. Business modules should call infrastructure through services, not scatter SDK setup everywhere.
-
-### `infrastructure/database`
-
-Database connection layer.
-
-- `mongodb.js`: connects Mongoose or MongoDB driver and manages connection lifecycle
-
-### `infrastructure/redis`
-
-Redis connection setup.
-
-- `redis.js`: exports a Redis client or factory
-
-### `infrastructure/queues`
-
-Background job infrastructure.
-
-Examples:
-
-- `bullmq.js`: shared BullMQ connection and queue helpers
-- `email.queue.js`: email jobs
-- `notification.queue.js`: push/SMS/email notification jobs
-- `order.queue.js`: order lifecycle jobs
-
-### `infrastructure/storage`
-
-File storage services.
-
-Examples:
-
-- `s3.service.js`: upload/delete/read files from S3
-- `cloudfront.service.js`: signed URLs or CDN URL helpers
-
-### `infrastructure/events`
-
-Internal application events.
-
-Examples:
-
-- `eventBus.js`: central event emitter or pub/sub adapter
-- `events.js`: shared event names such as `ORDER_CREATED` and `PAYMENT_CAPTURED`
-
-## `src/modules`
-
-Each module owns one business domain. A module should contain its own route definitions, service, validation, model, events, providers, and DTO/request-shape files where needed.
-
-Common module file roles:
-
-| File Pattern | Purpose |
-| --- | --- |
-| `*.routes.js` | Express route definitions for the module. |
-| `*.service.js` | Route-facing business logic. Reads request data when used as a handler, coordinates models, providers, events, and queues, and returns responses. |
-| `*.model.js` | Mongoose schema/model or database entity definition. |
-| `*.validation.js` | Request validation schemas, usually Joi or Zod. |
-| `*.events.js` | Event publishers and event handlers for the module. |
-| `providers/` | External service adapters used by the module. |
-| `services/` | Internal sub-services for complex module-specific logic. |
-| `dto/` | Request/response shape helpers. In JS, these are usually validation-aligned shape files, not TypeScript types. |
-
-### Auth Module
-
-Handles login, registration, OTP, social login, token refresh, logout, and password/account security.
-
-Suggested files:
+Global route mounting lives in `src/routes`.
 
 ```text
-src/modules/auth/
-|-- auth.service.js
-|-- auth.routes.js
-|-- auth.validation.js
-|-- auth.events.js
-|-- providers/
-|   |-- google.provider.js
-|   |-- apple.provider.js
-|   `-- facebook.provider.js
-`-- dto/
-    |-- login.dto.js
-    `-- verifyOtp.dto.js
+src/routes/
+|-- index.js
+`-- admin.routes.js
 ```
 
-### Users Module
-
-Handles customer profiles, addresses, account status, and admin user management.
-
-Suggested files:
-
-```text
-src/modules/users/
-|-- user.model.js
-|-- user.service.js
-|-- user.routes.js
-|-- user.validation.js
-`-- dto/
-```
-
-### Cart Module
-
-Handles cart creation, item add/remove/update, cart totals, and guest/authenticated cart behavior.
-
-Suggested files:
-
-```text
-src/modules/cart/
-|-- cart.model.js
-|-- cart.service.js
-`-- cart.routes.js
-```
-
-### Wishlist Module
-
-Handles customer saved items.
-
-Suggested files:
-
-```text
-src/modules/wishlist/
-|-- wishlist.model.js
-|-- wishlist.service.js
-`-- wishlist.routes.js
-```
-
-### Orders Module
-
-Handles checkout, order creation, order status changes, cancellations, refunds, and order history.
-
-Suggested files:
-
-```text
-src/modules/orders/
-|-- order.model.js
-|-- orderItem.model.js
-|-- order.service.js
-|-- order.routes.js
-|-- order.validation.js
-|-- order.events.js
-|-- services/
-|   |-- orderPricing.service.js
-|   |-- orderTax.service.js
-|   `-- orderStatus.service.js
-`-- dto/
-```
-
-### Payments Module
-
-Handles payment orders, payment verification, webhook processing, refunds, and payment provider adapters.
-
-Suggested files:
-
-```text
-src/modules/payments/
-|-- payment.model.js
-|-- payment.service.js
-|-- payment.routes.js
-|-- payment.webhook.js
-|-- payment.validation.js
-`-- providers/
-    |-- razorpay.provider.js
-    `-- stripe.provider.js
-```
-
-### Shipping Module
-
-Handles shipment creation, courier integration, tracking, delivery status updates, and shipping events.
-
-Suggested files:
-
-```text
-src/modules/shipping/
-|-- shipping.service.js
-|-- shipping.routes.js
-|-- delhivery.provider.js
-`-- shipping.events.js
-```
-
-### Reviews Module
-
-Handles customer reviews, moderation, and review validation.
-
-Suggested files:
-
-```text
-src/modules/reviews/
-|-- review.model.js
-|-- review.service.js
-|-- review.routes.js
-`-- review.validation.js
-```
-
-### Coupons Module
-
-Handles discount codes, usage limits, validation, expiry, and coupon application.
-
-Suggested files:
-
-```text
-src/modules/coupons/
-|-- coupon.model.js
-|-- coupon.service.js
-`-- coupon.routes.js
-```
-
-### Notifications Module
-
-Handles customer notifications through email, SMS, push, and internal events.
-
-Suggested files:
-
-```text
-src/modules/notifications/
-|-- notification.service.js
-|-- email.service.js
-|-- sms.service.js
-|-- push.service.js
-`-- notification.events.js
-```
-
-### Analytics Module
-
-Handles admin-facing reporting, sales metrics, and operational analytics.
-
-Suggested files:
-
-```text
-src/modules/analytics/
-|-- analytics.service.js
-|-- analytics.routes.js
-`-- analytics.events.js
-```
-
-### Admin Module
-
-Handles admin-only workflows and dashboard aggregation.
-
-Suggested files:
-
-```text
-src/modules/admin/
-|-- admin.routes.js
-|-- admin.service.js
-`-- dashboard.service.js
-```
-
-## `src/routes`
-
-Global route composition lives here.
-
-Recommended files:
-
-- `index.js`: mounts public module routes under `/api`
-- `admin.routes.js`: mounts admin module routes under `/api/admin`
-
-Example responsibility:
+`src/routes/index.js` mounts public API modules:
 
 ```js
 router.use('/auth', authRoutes);
 router.use('/users', userRoutes);
 router.use('/cart', cartRoutes);
+router.use('/wishlist', wishlistRoutes);
 router.use('/orders', orderRoutes);
+router.use('/payments', paymentRoutes);
+router.use('/shipping', shippingRoutes);
+router.use('/reviews', reviewRoutes);
+router.use('/coupons', couponRoutes);
+router.use('/analytics', analyticsRoutes);
+router.use('/admin', adminRoutes);
 ```
 
-## `tests`
+`src/routes/admin.routes.js` applies admin authentication and role checks before mounting admin module routes.
 
-Tests should mirror the application structure.
+## Module Layout
 
-Recommended layout:
+### Auth
 
-- `tests/unit`: isolated service and utility tests
-- `tests/integration`: route + database integration tests
-- `tests/e2e`: full API flows such as register -> login -> add to cart -> checkout
+```text
+src/modules/auth/
+|-- controllers/
+|   `-- auth.controller.js
+|-- services/
+|   `-- auth.service.js
+|-- routes/
+|   `-- auth.routes.js
+|-- models/
+|   `-- otp.model.js
+|-- validators/
+|   `-- auth.validator.js
+|-- providers/
+|   |-- apple.provider.js
+|   |-- facebook.provider.js
+|   `-- google.provider.js
+|-- dto/
+|   |-- login.dto.js
+|   |-- register.dto.js
+|   `-- verifyOtp.dto.js
+|-- auth.events.js
+|-- auth.routes.js
+|-- auth.service.js
+`-- auth.validation.js
+```
 
-## `uploads`
+The flat `auth.routes.js`, `auth.service.js`, and `auth.validation.js` files are legacy compatibility entry points while the migration is in progress.
 
-Temporary local file storage for development. Production uploads should go to S3 or another object storage provider.
+### Users
 
-Rules:
+```text
+src/modules/users/
+|-- controllers/
+|   `-- user.controller.js
+|-- services/
+|   `-- user.service.js
+|-- routes/
+|   `-- user.routes.js
+|-- models/
+|   `-- user.model.js
+|-- validators/
+|   `-- user.validator.js
+|-- dto/
+|   `-- createUser.dto.js
+|-- user.model.js
+|-- user.routes.js
+|-- user.service.js
+`-- user.validation.js
+```
 
-- do not commit uploaded files
-- keep upload validation strict
-- prefer storing only metadata in MongoDB
+The flat `user.*.js` files re-export the layered files so older imports keep working.
+
+### Customer
+
+```text
+src/modules/customer/
+|-- controllers/
+|   |-- address.controller.js
+|   `-- customer.controller.js
+|-- services/
+|   |-- address.service.js
+|   `-- customer.service.js
+|-- routes/
+|   |-- address.routes.js
+|   `-- customer.routes.js
+`-- models/
+    |-- address.model.js
+    `-- customer.model.js
+```
+
+### Catalog
+
+```text
+src/modules/category/
+|-- controllers/category.controller.js
+|-- services/category.service.js
+|-- routes/category.routes.js
+`-- models/category.model.js
+
+src/modules/brand/
+|-- controllers/brand.controller.js
+|-- services/brand.service.js
+|-- routes/brand.routes.js
+`-- models/brand.model.js
+
+src/modules/product/
+|-- controllers/
+|   |-- product.controller.js
+|   |-- product-option.controller.js
+|   `-- product-variant.controller.js
+|-- services/
+|   |-- product.service.js
+|   |-- product-option.service.js
+|   `-- product-variant.service.js
+|-- routes/
+|   |-- product.routes.js
+|   |-- product-option.routes.js
+|   `-- product-variant.routes.js
+|-- models/
+|   |-- product.model.js
+|   |-- product-image.model.js
+|   |-- product-option.model.js
+|   |-- product-option-value.model.js
+|   `-- product-variant.model.js
+`-- validators/
+    `-- product.validator.js
+```
+
+### Inventory
+
+```text
+src/modules/inventory/
+|-- controllers/
+|   |-- inventory.controller.js
+|   `-- stock-movement.controller.js
+|-- services/
+|   |-- inventory.service.js
+|   `-- stock-movement.service.js
+|-- routes/
+|   |-- inventory.routes.js
+|   `-- stock-movement.routes.js
+`-- models/
+    |-- inventory.model.js
+    `-- stock-movement.model.js
+```
+
+### Cart And Wishlist
+
+```text
+src/modules/cart/
+|-- controllers/cart.controller.js
+|-- services/cart.service.js
+|-- routes/cart.routes.js
+|-- models/
+|   |-- cart.model.js
+|   `-- cart-item.model.js
+|-- cart.model.js
+|-- cart.routes.js
+`-- cart.service.js
+
+src/modules/wishlist/
+|-- controllers/wishlist.controller.js
+|-- services/wishlist.service.js
+|-- routes/wishlist.routes.js
+|-- models/wishlist.model.js
+|-- wishlist.model.js
+|-- wishlist.routes.js
+`-- wishlist.service.js
+```
+
+The flat cart and wishlist files are compatibility entry points.
+
+### Order
+
+```text
+src/modules/order/
+|-- controllers/
+|   `-- order.controller.js
+|-- services/
+|   `-- order.service.js
+|-- routes/
+|   `-- order.routes.js
+`-- models/
+    |-- order.model.js
+    |-- order-item.model.js
+    `-- order-status-history.model.js
+```
+
+### Payment
+
+```text
+src/modules/payment/
+|-- controllers/
+|   |-- payment.controller.js
+|   `-- refund.controller.js
+|-- services/
+|   |-- payment.service.js
+|   `-- refund.service.js
+|-- routes/
+|   |-- payment.routes.js
+|   `-- refund.routes.js
+`-- models/
+    |-- payment.model.js
+    `-- refund.model.js
+```
+
+### Shipping
+
+```text
+src/modules/shipping/
+|-- controllers/shipping.controller.js
+|-- services/shipping.service.js
+|-- routes/shipping.routes.js
+|-- models/
+|   |-- shipment.model.js
+|   `-- shipping-rate.model.js
+|-- delhivery.provider.js
+|-- shipping.events.js
+|-- shipping.routes.js
+`-- shipping.service.js
+```
+
+The flat shipping files are compatibility entry points.
+
+### Coupon And Review
+
+```text
+src/modules/coupon/
+|-- controllers/coupon.controller.js
+|-- services/coupon.service.js
+|-- routes/coupon.routes.js
+`-- models/
+    |-- coupon.model.js
+    `-- coupon-usage.model.js
+
+src/modules/review/
+|-- controllers/review.controller.js
+|-- services/review.service.js
+|-- routes/review.routes.js
+`-- models/review.model.js
+```
+
+### Analytics And Admin
+
+```text
+src/modules/analytics/
+|-- routes/
+|   `-- analytics.routes.js
+`-- services/
+    `-- analytics.service.js
+
+src/modules/admin/
+|-- controllers/
+|   `-- admin.controller.js
+|-- services/
+|   |-- admin.service.js
+|   `-- dashboard.service.js
+|-- routes/
+|   `-- admin.routes.js
+`-- models/
+    `-- admin-activity-log.model.js
+```
+
+## File Responsibilities
+
+| Folder | Responsibility |
+| --- | --- |
+| `controllers/` | Express request handlers. They read `req`, call services, and send responses. |
+| `services/` | Business logic, database coordination, provider calls, and reusable module operations. |
+| `routes/` | Express routers. Keep these thin: middleware plus controller wiring. |
+| `models/` | Mongoose schemas/models or database entities. |
+| `validators/` | Request validation schemas and validation helpers. |
+| `providers/` | External API adapters such as Google, Facebook, payment, shipping, or storage providers. |
+| `dto/` | Request/response shape helpers used by routes or services. |
+
+## Import Rules
+
+Use layered imports for new code:
+
+```js
+import userRoutes from '@/modules/users/routes/user.routes.js';
+import User from '@/modules/users/models/user.model.js';
+import userService from '@/modules/users/services/user.service.js';
+```
+
+Avoid adding new imports to legacy flat files like:
+
+```js
+import userRoutes from '@/modules/users/user.routes.js';
+```
+
+Those files exist only to keep older code working during the migration.
 
 ## Naming Rules
 
-- Use `.js` files, not `.ts`.
-- Use native ES modules while `package.json` has `"type": "module"`.
-- Use `@/` imports for local application files, for example `@/common/errors/api.error.js`.
-- Use kebab-free, domain-first names like `user.service.js`, `order.routes.js`, and `auth.service.js`.
-- Keep route files thin.
-- Keep service files responsible for request handling, business rules, and module-local data access.
-- Keep providers responsible for third-party API integration.
-- Keep shared utilities in `common`, not inside individual modules.
-- Use arrow functions across application code.
+- Use `.js` files only.
+- Use native ES modules with `import` and `export`.
+- Use `@/` imports for local source files.
+- Keep module names singular where the new structure uses singular folders, such as `order`, `payment`, `review`, and `coupon`.
+- Keep route files thin and put behavior in controllers/services.
+- Put reusable cross-module code in `src/common`.
+- Put infrastructure integrations in `src/infrastructure`.
 
-## Recommended Build Order
+## Migration Notes
 
-1. Stabilize base app structure: `app.js`, env config, global error handling, response helper, async handler.
-2. Add database connection and user model.
-3. Build auth and users.
-4. Build cart and wishlist.
-5. Build orders.
-6. Build payments and webhooks.
-7. Build shipping.
-8. Build reviews, coupons, notifications, analytics, and admin dashboard.
-9. Add tests around each module as it becomes functional.
-
-
+- `src/routes/index.js` now imports from layered `routes/` folders.
+- Several old flat files remain as compatibility re-exports while modules are migrated.
+- The deleted plural module folders such as `orders`, `payments`, `reviews`, and `coupons` should not be used by new code.
+- Scaffolded modules may have empty model/controller files until their schema and business logic are discussed and implemented.
