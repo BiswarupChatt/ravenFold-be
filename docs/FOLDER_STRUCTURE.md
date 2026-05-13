@@ -115,6 +115,7 @@ src/modules/users/
 |-- routes/
 |   `-- user.routes.js
 |-- models/
+|   |-- address.model.js
 |   `-- user.model.js
 |-- validators/
 |   `-- user.validator.js
@@ -128,23 +129,7 @@ src/modules/users/
 
 The flat `user.*.js` files re-export the layered files so older imports keep working.
 
-### Customer
-
-```text
-src/modules/customer/
-|-- controllers/
-|   |-- address.controller.js
-|   `-- customer.controller.js
-|-- services/
-|   |-- address.service.js
-|   `-- customer.service.js
-|-- routes/
-|   |-- address.routes.js
-|   `-- customer.routes.js
-`-- models/
-    |-- address.model.js
-    `-- customer.model.js
-```
+Addresses belong to the user module because the project does not maintain a separate customer model.
 
 ### Catalog
 
