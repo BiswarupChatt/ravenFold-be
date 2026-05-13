@@ -109,10 +109,13 @@ The flat `auth.routes.js`, `auth.service.js`, and `auth.validation.js` files are
 ```text
 src/modules/users/
 |-- controllers/
+|   |-- address.controller.js
 |   `-- user.controller.js
 |-- services/
+|   |-- address.service.js
 |   `-- user.service.js
 |-- routes/
+|   |-- address.routes.js
 |   `-- user.routes.js
 |-- models/
 |   |-- address.model.js
