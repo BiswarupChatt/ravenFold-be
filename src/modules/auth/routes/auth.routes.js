@@ -9,6 +9,7 @@ const router = express.Router();
 router.get('/', asyncHandler(authService.getStatus));
 router.post('/register', asyncHandler(authService.register));
 router.post('/login', asyncHandler(authService.login));
+router.post('/admin/login', asyncHandler(authService.loginAdmin));
 router.post('/google', asyncHandler(authService.googleAuth));
 router.post('/facebook', asyncHandler(authService.facebookAuth));
 router.post('/verify-otp', asyncHandler(authService.verifyOtp));

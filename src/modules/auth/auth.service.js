@@ -207,6 +207,22 @@ const loginUser = async (payload) => {
   return createAuthResponse(user);
 };
 
+const assertAdminAuthResponse = (authResponse) => {
+  const roles = Array.isArray(authResponse?.user?.roles)
+    ? authResponse.user.roles
+    : [authResponse?.user?.role].filter(Boolean);
+
+  if (!roles.includes(ROLES.ADMIN) && !roles.includes(ROLES.SUPER_ADMIN)) {
+    throw new ApiError(403, 'Admin access required');
+  }
+  
+  return authResponse;
+};
+
+const loginAdminUser = async (payload) => {
+  return assertAdminAuthResponse(await loginUser(payload));
+};
+
 const verifyOtpPayload = async (payload) => {
   return {
     received: Boolean(payload),
@@ -283,6 +299,10 @@ const login = async (req, res) => {
   return sendSuccess(res, await loginUser(req.body), 'Login successful');
 };
 
+const loginAdmin = async (req, res) => {
+  return sendSuccess(res, await loginAdminUser(req.body), 'Admin login successful');
+};
+
 const verifyOtp = async (req, res) => {
   return sendSuccess(res, await verifyOtpPayload(req.body), 'OTP verification flow not implemented yet');
 };
@@ -311,6 +331,8 @@ export {
   getStatus,
   googleAuth,
   login,
+  loginAdmin,
+  loginAdminUser,
   loginUser,
   register,
   registerUser,
@@ -326,6 +348,8 @@ export default {
   getStatus,
   googleAuth,
   login,
+  loginAdmin,
+  loginAdminUser,
   loginUser,
   register,
   registerUser,
