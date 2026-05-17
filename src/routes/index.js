@@ -8,6 +8,7 @@ import categoryRoutes from '@/modules/category/routes/category.routes.js';
 import couponRoutes from '@/modules/coupon/routes/coupon.routes.js';
 import orderRoutes from '@/modules/order/routes/order.routes.js';
 import paymentRoutes from '@/modules/payment/routes/payment.routes.js';
+import productRoutes from '@/modules/product/routes/product.routes.js';
 import reviewRoutes from '@/modules/review/routes/review.routes.js';
 import shippingRoutes from '@/modules/shipping/routes/shipping.routes.js';
 import userRoutes from '@/modules/users/routes/user.routes.js';
@@ -34,6 +35,7 @@ router.get('/health', (req, res) => {
 router.use('/auth', authRoutes);
 router.use('/users', userRoutes);
 router.use('/categories', categoryRoutes);
+router.use('/products', productRoutes);
 router.use('/cart', cartRoutes);
 router.use('/wishlist', wishlistRoutes);
 router.use('/orders', orderRoutes);
