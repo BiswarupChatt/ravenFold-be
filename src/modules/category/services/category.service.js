@@ -142,6 +142,11 @@ const buildListFilter = (query = {}, { includeInactive = false } = {}) => {
 
   if (Object.prototype.hasOwnProperty.call(query, 'parentCategoryId')) {
     filter.parentCategoryId = normalizeOptionalParentCategoryId(query.parentCategoryId);
+  } else if (
+    Object.prototype.hasOwnProperty.call(query, 'rootOnly') &&
+    normalizeBoolean(query.rootOnly, 'rootOnly')
+  ) {
+    filter.parentCategoryId = null;
   }
 
   const search = normalizeText(query.search);
