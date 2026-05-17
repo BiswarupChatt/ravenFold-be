@@ -22,9 +22,17 @@ export const googleClientIds = (process.env.GOOGLE_CLIENT_IDS || process.env.GOO
 export const facebookAppId = process.env.FACEBOOK_APP_ID || '';
 export const facebookAppSecret = process.env.FACEBOOK_APP_SECRET || '';
 export const facebookGraphVersion = process.env.FACEBOOK_GRAPH_VERSION || '';
+export const cloudinaryCloudName = process.env.CLOUDINARY_CLOUD_NAME || '';
+export const cloudinaryApiKey = process.env.CLOUDINARY_API_KEY || '';
+export const cloudinaryApiSecret = process.env.CLOUDINARY_API_SECRET || '';
+export const cloudinaryUploadFolder = process.env.CLOUDINARY_UPLOAD_FOLDER || 'ravenfold/products';
 
 export default {
   apiPrefix,
+  cloudinaryApiKey,
+  cloudinaryApiSecret,
+  cloudinaryCloudName,
+  cloudinaryUploadFolder,
   facebookAppId,
   facebookAppSecret,
   facebookGraphVersion,

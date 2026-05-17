@@ -1,4 +1,5 @@
 import { sendSuccess } from '@/common/helpers/response.helper.js';
+import cloudinaryService from '@/infrastructure/storage/cloudinary.service.js';
 import productService from '@/modules/product/services/product.service.js';
 
 const getStatus = async (req, res) => {
@@ -7,6 +8,15 @@ const getStatus = async (req, res) => {
 
 const createProduct = async (req, res) => {
   return sendSuccess(res, await productService.createProduct(req.body), 'Product created', 201);
+};
+
+const createProductImageUploadSignature = async (req, res) => {
+  return sendSuccess(
+    res,
+    cloudinaryService.createProductImageUploadSignature(),
+    'Cloudinary upload signature created',
+    201,
+  );
 };
 
 const listProducts = async (req, res) => {
@@ -50,6 +60,7 @@ const deleteProduct = async (req, res) => {
 };
 
 export {
+  createProductImageUploadSignature,
   createProduct,
   deleteProduct,
   getAdminProduct,
@@ -61,6 +72,7 @@ export {
 };
 
 export default {
+  createProductImageUploadSignature,
   createProduct,
   deleteProduct,
   getAdminProduct,

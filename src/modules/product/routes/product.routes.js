@@ -8,6 +8,12 @@ import productController from '@/modules/product/controllers/product.controller.
 const router = express.Router();
 
 router.get('/status', asyncHandler(productController.getStatus));
+router.post(
+  '/uploads/cloudinary-signature',
+  authenticateUser,
+  adminMiddleware,
+  asyncHandler(productController.createProductImageUploadSignature),
+);
 router.get(
   '/admin/:productIdOrSlug',
   authenticateUser,
