@@ -141,12 +141,10 @@ productSchema.index({
   'attributes.value': 'text',
 });
 
-productSchema.pre('validate', function validateProductPricing(next) {
+productSchema.pre('validate', function validateProductPricing() {
   if (this.salePrice !== null && this.salePrice !== undefined && this.salePrice > this.basePrice) {
     this.invalidate('salePrice', 'salePrice cannot be greater than basePrice');
   }
-
-  next();
 });
 
 const Product = mongoose.models.Product || mongoose.model('Product', productSchema);
