@@ -3,6 +3,8 @@ import express from 'express';
 import asyncHandler from '@/common/helpers/asyncHandler.helper.js';
 import adminMiddleware from '@/common/middleware/admin.middleware.js';
 import { authenticateUser } from '@/common/middleware/auth.middleware.js';
+import productOptionRoutes from '@/modules/product/routes/product-option.routes.js';
+import productVariantRoutes from '@/modules/product/routes/product-variant.routes.js';
 import productController from '@/modules/product/controllers/product.controller.js';
 
 const router = express.Router();
@@ -26,6 +28,8 @@ router.get(
   adminMiddleware,
   asyncHandler(productController.listAdminProducts),
 );
+router.use('/:productId/options', productOptionRoutes);
+router.use('/:productId/variants', productVariantRoutes);
 
 router
   .route('/')

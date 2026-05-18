@@ -4,6 +4,9 @@ import ApiError from '@/common/errors/api.error.js';
 import { getPagination } from '@/common/utils/pagination.util.js';
 import { createSlug } from '@/common/utils/slug.util.js';
 import Category from '@/modules/category/models/category.model.js';
+import ProductOptionValue from '@/modules/product/models/product-option-value.model.js';
+import ProductOption from '@/modules/product/models/product-option.model.js';
+import ProductVariant from '@/modules/product/models/product-variant.model.js';
 import Product, { productStatuses } from '@/modules/product/models/product.model.js';
 
 const editableProductFields = [
@@ -632,7 +635,16 @@ const updateProduct = async (productId, payload) => {
 const deleteProduct = async (productId) => {
   const product = await getProductDocument(productId);
   const deletedProduct = formatProduct(product);
+  const productOptions = await ProductOption.find({ productId: product._id }).select('_id').lean().exec();
+  const productOptionIds = productOptions.map((option) => option._id);
 
+  await ProductVariant.deleteMany({ productId: product._id }).exec();
+  await ProductOptionValue.deleteMany({
+    productOptionId: {
+      $in: productOptionIds,
+    },
+  }).exec();
+  await ProductOption.deleteMany({ productId: product._id }).exec();
   await product.deleteOne();
 
   return deletedProduct;
