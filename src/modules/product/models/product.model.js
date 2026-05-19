@@ -1,6 +1,100 @@
 import mongoose from 'mongoose';
 
 const productStatuses = ['draft', 'active', 'inactive'];
+const weightUnits = ['g', 'kg', 'lb', 'oz'];
+const dimensionUnits = ['cm', 'in'];
+
+const shippingSchema = new mongoose.Schema(
+  {
+    requiresShipping: {
+      type: Boolean,
+      default: true,
+    },
+    weight: {
+      value: {
+        type: Number,
+        min: 0,
+        default: null,
+      },
+      unit: {
+        type: String,
+        enum: weightUnits,
+        default: 'kg',
+      },
+    },
+    dimensions: {
+      length: {
+        type: Number,
+        min: 0,
+        default: null,
+      },
+      width: {
+        type: Number,
+        min: 0,
+        default: null,
+      },
+      height: {
+        type: Number,
+        min: 0,
+        default: null,
+      },
+      unit: {
+        type: String,
+        enum: dimensionUnits,
+        default: 'cm',
+      },
+    },
+    shippingClass: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+    isFreeShippingEligible: {
+      type: Boolean,
+      default: false,
+    },
+  },
+  {
+    _id: false,
+  },
+);
+
+const seoSchema = new mongoose.Schema(
+  {
+    title: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+    description: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+    keywords: {
+      type: [
+        {
+          type: String,
+          lowercase: true,
+          trim: true,
+        },
+      ],
+      default: [],
+    },
+    canonicalUrl: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+    noIndex: {
+      type: Boolean,
+      default: false,
+    },
+  },
+  {
+    _id: false,
+  },
+);
 
 const productSchema = new mongoose.Schema(
   {
@@ -35,6 +129,10 @@ const productSchema = new mongoose.Schema(
       type: String,
       trim: true,
       default: '',
+    },
+    seo: {
+      type: seoSchema,
+      default: () => ({}),
     },
     categoryId: {
       type: mongoose.Schema.Types.ObjectId,
@@ -111,6 +209,10 @@ const productSchema = new mongoose.Schema(
       ],
       default: [],
     },
+    shipping: {
+      type: shippingSchema,
+      default: () => ({}),
+    },
   },
   {
     collection: 'products',
@@ -136,6 +238,9 @@ productSchema.index({
   shortDescription: 'text',
   metaTitle: 'text',
   metaDescription: 'text',
+  'seo.title': 'text',
+  'seo.description': 'text',
+  'seo.keywords': 'text',
   tags: 'text',
   'attributes.name': 'text',
   'attributes.value': 'text',
@@ -149,6 +254,6 @@ productSchema.pre('validate', function validateProductPricing() {
 
 const Product = mongoose.models.Product || mongoose.model('Product', productSchema);
 
-export { productSchema, productStatuses };
+export { dimensionUnits, productSchema, productStatuses, seoSchema, shippingSchema, weightUnits };
 
 export default Product;

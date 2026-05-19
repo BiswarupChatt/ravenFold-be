@@ -7,7 +7,7 @@ import Category from '@/modules/category/models/category.model.js';
 import ProductOptionValue from '@/modules/product/models/product-option-value.model.js';
 import ProductOption from '@/modules/product/models/product-option.model.js';
 import ProductVariant from '@/modules/product/models/product-variant.model.js';
-import Product, { productStatuses } from '@/modules/product/models/product.model.js';
+import Product, { dimensionUnits, productStatuses, weightUnits } from '@/modules/product/models/product.model.js';
 
 const editableProductFields = [
   'name',
@@ -16,6 +16,7 @@ const editableProductFields = [
   'shortDescription',
   'metaTitle',
   'metaDescription',
+  'seo',
   'categoryId',
   'basePrice',
   'salePrice',
@@ -26,6 +27,7 @@ const editableProductFields = [
   'isFeatured',
   'tags',
   'attributes',
+  'shipping',
 ];
 
 const sortableProductFields = new Set(['name', 'createdAt', 'updatedAt', 'basePrice', 'salePrice']);
@@ -108,6 +110,24 @@ const normalizeMoney = (value, field, { required = false } = {}) => {
   return Number(numberValue.toFixed(2));
 };
 
+const normalizeOptionalNumber = (value, field) => {
+  if (value === null || value === undefined || value === '') {
+    return null;
+  }
+
+  const numberValue = Number(value);
+
+  if (!Number.isFinite(numberValue)) {
+    throw new ApiError(400, `${field} must be a number`);
+  }
+
+  if (numberValue < 0) {
+    throw new ApiError(400, `${field} cannot be negative`);
+  }
+
+  return numberValue;
+};
+
 const normalizeStatus = (value) => {
   const normalizedValue = normalizeText(value).toLowerCase();
 
@@ -187,6 +207,159 @@ const normalizeAttributes = (value) => {
   });
 };
 
+const normalizeShipping = (value = {}) => {
+  if (value === null || value === undefined || value === '') {
+    return {};
+  }
+
+  if (typeof value !== 'object' || Array.isArray(value)) {
+    throw new ApiError(400, 'shipping must be an object');
+  }
+
+  const shipping = {};
+
+  if (hasOwn(value, 'requiresShipping')) {
+    shipping.requiresShipping = normalizeBoolean(value.requiresShipping, 'shipping.requiresShipping');
+  }
+
+  if (hasOwn(value, 'shippingClass')) {
+    shipping.shippingClass = normalizeText(value.shippingClass);
+  }
+
+  if (hasOwn(value, 'isFreeShippingEligible')) {
+    shipping.isFreeShippingEligible = normalizeBoolean(
+      value.isFreeShippingEligible,
+      'shipping.isFreeShippingEligible',
+    );
+  }
+
+  if (hasOwn(value, 'weight')) {
+    if (value.weight === null || typeof value.weight !== 'object' || Array.isArray(value.weight)) {
+      throw new ApiError(400, 'shipping.weight must be an object');
+    }
+
+    shipping.weight = {};
+
+    if (hasOwn(value.weight, 'value')) {
+      shipping.weight.value = normalizeOptionalNumber(value.weight.value, 'shipping.weight.value');
+    }
+
+    if (hasOwn(value.weight, 'unit')) {
+      const unit = normalizeText(value.weight.unit).toLowerCase();
+
+      if (!weightUnits.includes(unit)) {
+        throw new ApiError(400, `shipping.weight.unit must be one of: ${weightUnits.join(', ')}`);
+      }
+
+      shipping.weight.unit = unit;
+    }
+  }
+
+  if (hasOwn(value, 'dimensions')) {
+    if (value.dimensions === null || typeof value.dimensions !== 'object' || Array.isArray(value.dimensions)) {
+      throw new ApiError(400, 'shipping.dimensions must be an object');
+    }
+
+    shipping.dimensions = {};
+
+    for (const field of ['length', 'width', 'height']) {
+      if (hasOwn(value.dimensions, field)) {
+        shipping.dimensions[field] = normalizeOptionalNumber(
+          value.dimensions[field],
+          `shipping.dimensions.${field}`,
+        );
+      }
+    }
+
+    if (hasOwn(value.dimensions, 'unit')) {
+      const unit = normalizeText(value.dimensions.unit).toLowerCase();
+
+      if (!dimensionUnits.includes(unit)) {
+        throw new ApiError(400, `shipping.dimensions.unit must be one of: ${dimensionUnits.join(', ')}`);
+      }
+
+      shipping.dimensions.unit = unit;
+    }
+  }
+
+  return shipping;
+};
+
+const mergeShipping = (currentShipping = {}, nextShipping = {}) => ({
+  requiresShipping: hasOwn(nextShipping, 'requiresShipping')
+    ? nextShipping.requiresShipping
+    : currentShipping.requiresShipping !== false,
+  weight: {
+    value: hasOwn(nextShipping.weight || {}, 'value')
+      ? nextShipping.weight.value
+      : currentShipping.weight?.value ?? null,
+    unit: nextShipping.weight?.unit || currentShipping.weight?.unit || 'kg',
+  },
+  dimensions: {
+    length: hasOwn(nextShipping.dimensions || {}, 'length')
+      ? nextShipping.dimensions.length
+      : currentShipping.dimensions?.length ?? null,
+    width: hasOwn(nextShipping.dimensions || {}, 'width')
+      ? nextShipping.dimensions.width
+      : currentShipping.dimensions?.width ?? null,
+    height: hasOwn(nextShipping.dimensions || {}, 'height')
+      ? nextShipping.dimensions.height
+      : currentShipping.dimensions?.height ?? null,
+    unit: nextShipping.dimensions?.unit || currentShipping.dimensions?.unit || 'cm',
+  },
+  shippingClass: hasOwn(nextShipping, 'shippingClass')
+    ? nextShipping.shippingClass
+    : currentShipping.shippingClass || '',
+  isFreeShippingEligible: hasOwn(nextShipping, 'isFreeShippingEligible')
+    ? nextShipping.isFreeShippingEligible
+    : Boolean(currentShipping.isFreeShippingEligible),
+});
+
+const normalizeSeo = (value = {}) => {
+  if (value === null || value === undefined || value === '') {
+    return {};
+  }
+
+  if (typeof value !== 'object' || Array.isArray(value)) {
+    throw new ApiError(400, 'seo must be an object');
+  }
+
+  const seo = {};
+
+  if (hasOwn(value, 'title')) {
+    seo.title = normalizeText(value.title);
+  }
+
+  if (hasOwn(value, 'description')) {
+    seo.description = normalizeText(value.description);
+  }
+
+  if (hasOwn(value, 'keywords')) {
+    seo.keywords = normalizeStringArray(value.keywords, 'seo.keywords', {
+      lowercase: true,
+      splitString: true,
+    });
+  }
+
+  if (hasOwn(value, 'canonicalUrl')) {
+    seo.canonicalUrl = normalizeText(value.canonicalUrl);
+  }
+
+  if (hasOwn(value, 'noIndex')) {
+    seo.noIndex = normalizeBoolean(value.noIndex, 'seo.noIndex');
+  }
+
+  return seo;
+};
+
+const mergeSeo = (currentSeo = {}, nextSeo = {}) => ({
+  title: hasOwn(nextSeo, 'title') ? nextSeo.title : currentSeo.title || '',
+  description: hasOwn(nextSeo, 'description') ? nextSeo.description : currentSeo.description || '',
+  keywords: hasOwn(nextSeo, 'keywords') ? nextSeo.keywords : currentSeo.keywords || [],
+  canonicalUrl: hasOwn(nextSeo, 'canonicalUrl') ? nextSeo.canonicalUrl : currentSeo.canonicalUrl || '',
+  noIndex: hasOwn(nextSeo, 'noIndex') ? nextSeo.noIndex : Boolean(currentSeo.noIndex),
+});
+
 const escapeRegex = (value) => {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 };
@@ -203,15 +376,42 @@ const getDocumentId = (value) => {
   return value.toString();
 };
 
+const formatShipping = (shipping = {}) => ({
+  requiresShipping: shipping.requiresShipping !== false,
+  weight: {
+    value: shipping.weight?.value ?? null,
+    unit: shipping.weight?.unit || 'kg',
+  },
+  dimensions: {
+    length: shipping.dimensions?.length ?? null,
+    width: shipping.dimensions?.width ?? null,
+    height: shipping.dimensions?.height ?? null,
+    unit: shipping.dimensions?.unit || 'cm',
+  },
+  shippingClass: shipping.shippingClass || '',
+  isFreeShippingEligible: Boolean(shipping.isFreeShippingEligible),
+});
+
+const formatSeo = (seo = {}, product = {}) => ({
+  title: seo.title || product.metaTitle || '',
+  description: seo.description || product.metaDescription || '',
+  keywords: seo.keywords || [],
+  canonicalUrl: seo.canonicalUrl || '',
+  noIndex: Boolean(seo.noIndex),
+});
+
 const formatProduct = (product) => {
+  const seo = formatSeo(product.seo || {}, product);
+
   return {
     id: product.id || product._id?.toString(),
     name: product.name,
     slug: product.slug,
     description: product.description || '',
     shortDescription: product.shortDescription || '',
-    metaTitle: product.metaTitle || '',
-    metaDescription: product.metaDescription || '',
+    metaTitle: seo.title,
+    metaDescription: seo.description,
+    seo,
     categoryId: getDocumentId(product.categoryId),
     basePrice: product.basePrice,
     salePrice: product.salePrice ?? null,
@@ -222,6 +422,7 @@ const formatProduct = (product) => {
     isFeatured: Boolean(product.isFeatured),
     tags: product.tags || [],
     attributes: product.attributes || [],
+    shipping: formatShipping(product.shipping || {}),
     createdAt: product.createdAt,
     updatedAt: product.updatedAt,
   };
@@ -243,6 +444,7 @@ const validateProductPricing = ({ basePrice, salePrice }) => {
 const buildProductPayload = (
   payload = {},
   {
+    currentProduct = null,
     requireName = false,
     requireCategoryId = false,
     requireBasePrice = false,
@@ -250,6 +452,8 @@ const buildProductPayload = (
   } = {},
 ) => {
   const productPayload = {};
+  let seoPatch = null;
+  let shippingPatch = null;
 
   for (const field of editableProductFields) {
     if (!hasOwn(payload, field)) {
@@ -273,6 +477,32 @@ const buildProductPayload = (
 
     if (field === 'salePrice') {
       productPayload.salePrice = normalizeMoney(payload.salePrice, 'salePrice');
+      continue;
+    }
+
+    if (field === 'metaTitle') {
+      productPayload.metaTitle = normalizeText(payload.metaTitle);
+      seoPatch = {
+        ...(seoPatch || {}),
+        title: productPayload.metaTitle,
+      };
+      continue;
+    }
+
+    if (field === 'metaDescription') {
+      productPayload.metaDescription = normalizeText(payload.metaDescription);
+      seoPatch = {
+        ...(seoPatch || {}),
+        description: productPayload.metaDescription,
+      };
+      continue;
+    }
+
+    if (field === 'seo') {
+      seoPatch = {
+        ...(seoPatch || {}),
+        ...normalizeSeo(payload.seo),
+      };
       continue;
     }
 
@@ -304,12 +534,30 @@ const buildProductPayload = (
       continue;
     }
 
+    if (field === 'shipping') {
+      shippingPatch = {
+        ...(shippingPatch || {}),
+        ...normalizeShipping(payload.shipping),
+      };
+      continue;
+    }
+
     if (field === 'sku') {
       productPayload.sku = normalizeText(payload.sku).toUpperCase();
       continue;
     }
 
     productPayload[field] = normalizeText(payload[field]);
+  }
+
+  if (seoPatch) {
+    productPayload.seo = mergeSeo(currentProduct ? formatSeo(currentProduct.seo || {}, currentProduct) : {}, seoPatch);
+    productPayload.metaTitle = productPayload.seo.title;
+    productPayload.metaDescription = productPayload.seo.description;
+  }
+
+  if (shippingPatch) {
+    productPayload.shipping = mergeShipping(currentProduct?.shipping || {}, shippingPatch);
   }
 
   if (requireName && !productPayload.name) {
@@ -425,6 +673,15 @@ const buildListFilter = (query = {}, { includeInactive = false } = {}) => {
       },
       {
         metaDescription: searchRegex,
+      },
+      {
+        'seo.title': searchRegex,
+      },
+      {
+        'seo.description': searchRegex,
+      },
+      {
+        'seo.keywords': searchRegex,
       },
       {
         tags: searchRegex,
@@ -593,7 +850,7 @@ const getProduct = async (productIdOrSlug, options = {}) => {
 
 const updateProduct = async (productId, payload) => {
   const product = await getProductDocument(productId);
-  const productPayload = buildProductPayload(payload);
+  const productPayload = buildProductPayload(payload, { currentProduct: product });
 
   if (Object.keys(productPayload).length === 0) {
     throw new ApiError(400, 'No product fields provided to update');

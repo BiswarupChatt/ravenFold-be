@@ -1,7 +1,6 @@
 import mongoose from 'mongoose';
 
-const weightUnits = ['g', 'kg', 'lb', 'oz'];
-const dimensionUnits = ['cm', 'in'];
+import { dimensionUnits, shippingSchema, weightUnits } from '@/modules/product/models/product.model.js';
 
 const variantOptionValueSchema = new mongoose.Schema(
   {
@@ -14,61 +13,6 @@ const variantOptionValueSchema = new mongoose.Schema(
       type: String,
       required: true,
       trim: true,
-    },
-  },
-  {
-    _id: false,
-  },
-);
-
-const shippingSchema = new mongoose.Schema(
-  {
-    requiresShipping: {
-      type: Boolean,
-      default: true,
-    },
-    weight: {
-      value: {
-        type: Number,
-        min: 0,
-        default: null,
-      },
-      unit: {
-        type: String,
-        enum: weightUnits,
-        default: 'gram',
-      },
-    },
-    dimensions: {
-      length: {
-        type: Number,
-        min: 0,
-        default: null,
-      },
-      width: {
-        type: Number,
-        min: 0,
-        default: null,
-      },
-      height: {
-        type: Number,
-        min: 0,
-        default: null,
-      },
-      unit: {
-        type: String,
-        enum: dimensionUnits,
-        default: 'cm',
-      },
-    },
-    shippingClass: {
-      type: String,
-      trim: true,
-      default: '',
-    },
-    isFreeShippingEligible: {
-      type: Boolean,
-      default: false,
     },
   },
   {
