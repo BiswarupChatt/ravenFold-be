@@ -10,6 +10,6 @@
 8. Order
 9. Payment
 10. Shipping
-11. Coupon
+11. Coupon / Promotion
 12. Review
 13. Admin Dashboard
