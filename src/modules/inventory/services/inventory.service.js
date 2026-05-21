@@ -31,6 +31,8 @@ const normalizeText = (value) => {
   return String(value).trim();
 };
 
+const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 const normalizeBoolean = (value, field) => {
   if (typeof value === 'boolean') {
     return value;
@@ -258,7 +260,65 @@ const buildInventoryPayload = (payload = {}, { requireTarget = false } = {}) => 
   return inventoryPayload;
 };
 
-const buildListFilter = (query = {}) => {
+const buildSearchFilter = async (query = {}) => {
+  const search = normalizeText(query.search);
+
+  if (!search) {
+    return null;
+  }
+
+  const searchRegex = new RegExp(escapeRegex(search), 'i');
+  const [products, variants] = await Promise.all([
+    Product.find({
+      $or: [
+        { name: searchRegex },
+        { slug: searchRegex },
+        { sku: searchRegex },
+      ],
+    })
+      .select('_id')
+      .lean()
+      .exec(),
+    ProductVariant.find({
+      $or: [
+        { sku: searchRegex },
+        { 'optionValues.optionName': searchRegex },
+        { 'optionValues.value': searchRegex },
+      ],
+    })
+      .select('_id productId')
+      .lean()
+      .exec(),
+  ]);
+
+  const productIds = products.map((product) => product._id);
+  const variantIds = variants.map((variant) => variant._id);
+  const searchConditions = [];
+
+  if (productIds.length > 0) {
+    searchConditions.push({ productId: { $in: productIds } });
+  }
+
+  if (variantIds.length > 0) {
+    searchConditions.push({ variantId: { $in: variantIds } });
+  }
+
+  if (mongoose.Types.ObjectId.isValid(search)) {
+    searchConditions.push(
+      { _id: search },
+      { productId: search },
+      { variantId: search },
+    );
+  }
+
+  if (searchConditions.length === 0) {
+    return { _id: { $in: [] } };
+  }
+
+  return { $or: searchConditions };
+};
+
+const buildListFilter = async (query = {}) => {
   const filter = {};
 
   if (hasOwn(query, 'productId')) {
@@ -283,6 +343,12 @@ const buildListFilter = (query = {}) => {
         '$lowStockThreshold',
       ],
     };
+  }
+
+  const searchFilter = await buildSearchFilter(query);
+
+  if (searchFilter) {
+    Object.assign(filter, searchFilter);
   }
 
   return filter;
@@ -384,7 +450,7 @@ const createInventoryStock = async (payload = {}, actor = null) => {
 const listInventoryStocks = async (query = {}) => {
   assertDatabaseReady();
   const { limit, page, skip } = getPagination(query);
-  const filter = buildListFilter(query);
+  const filter = await buildListFilter(query);
   const [stocks, total] = await Promise.all([
     InventoryStock.find(filter)
       .populate({ path: 'productId', select: 'name sku hasVariants' })
