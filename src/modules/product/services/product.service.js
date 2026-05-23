@@ -376,6 +376,18 @@ const getDocumentId = (value) => {
   return value.toString();
 };
 
+const formatCategorySummary = (category) => {
+  if (!category || typeof category !== 'object' || !category._id || !category.name) {
+    return null;
+  }
+
+  return {
+    id: category._id.toString(),
+    name: category.name,
+    slug: category.slug,
+  };
+};
+
 const formatShipping = (shipping = {}) => ({
   requiresShipping: shipping.requiresShipping !== false,
   weight: {
@@ -413,6 +425,8 @@ const formatProduct = (product) => {
     metaDescription: seo.description,
     seo,
     categoryId: getDocumentId(product.categoryId),
+    category: formatCategorySummary(product.categoryId),
+    categoryName: product.categoryId?.name || '',
     basePrice: product.basePrice,
     salePrice: product.salePrice ?? null,
     sku: product.sku,
@@ -806,7 +820,13 @@ const listProducts = async (query = {}, options = {}) => {
   const filter = buildListFilter(query, options);
   const sort = buildSort(query);
   const [products, total] = await Promise.all([
-    Product.find(filter).sort(sort).skip(skip).limit(limit).lean().exec(),
+    Product.find(filter)
+      .populate({ path: 'categoryId', select: 'name slug' })
+      .sort(sort)
+      .skip(skip)
+      .limit(limit)
+      .lean()
+      .exec(),
     Product.countDocuments(filter).exec(),
   ]);
 
@@ -839,7 +859,10 @@ const getProduct = async (productIdOrSlug, options = {}) => {
     filter.status = 'active';
   }
 
-  const product = await Product.findOne(filter).lean().exec();
+  const product = await Product.findOne(filter)
+    .populate({ path: 'categoryId', select: 'name slug' })
+    .lean()
+    .exec();
 
   if (!product) {
     throw new ApiError(404, 'Product not found');
