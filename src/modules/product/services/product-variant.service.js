@@ -39,6 +39,8 @@ const normalizeText = (value) => {
   return String(value).trim();
 };
 
+const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 const normalizeBoolean = (value, field) => {
   if (typeof value === 'boolean') {
     return value;
@@ -157,7 +159,12 @@ const formatProductVariant = (variant) => ({
   id: variant.id || variant._id?.toString(),
   productId: variant.productId?.toString(),
   sku: variant.sku,
-  optionValues: variant.optionValues || [],
+  optionValues: (variant.optionValues || []).map((optionValue) => ({
+    optionId: optionValue.optionId?.toString() || '',
+    valueId: optionValue.valueId?.toString() || '',
+    optionName: optionValue.optionName,
+    value: optionValue.value,
+  })),
   price: variant.price,
   salePrice: variant.salePrice ?? null,
   images: variant.images || [],
@@ -169,7 +176,12 @@ const formatProductVariant = (variant) => ({
 
 const buildOptionSignature = (optionValues = []) => {
   return optionValues
-    .map((optionValue) => `${optionValue.optionName.toLowerCase()}:${optionValue.value.toLowerCase()}`)
+    .map((optionValue) => {
+      const optionKey = optionValue.optionId?.toString() || optionValue.optionName.toLowerCase();
+      const valueKey = optionValue.valueId?.toString() || optionValue.value.toLowerCase();
+
+      return `${optionKey}:${valueKey}`;
+    })
     .sort()
     .join('|');
 };
@@ -184,8 +196,22 @@ const normalizeVariantOptionValues = async (productId, value) => {
   }
 
   const options = await ProductOption.find({ productId }).lean().exec();
+  const optionIds = options.map((option) => option._id);
+  const optionById = new Map(options.map((option) => [option._id.toString(), option]));
   const optionByName = new Map(options.map((option) => [option.name.toLowerCase(), option]));
-  const seenOptionNames = new Set();
+  const values = await ProductOptionValue.find({
+    productOptionId: {
+      $in: optionIds,
+    },
+  }).lean().exec();
+  const valueById = new Map(values.map((optionValue) => [optionValue._id.toString(), optionValue]));
+  const valueByOptionAndName = new Map(
+    values.map((optionValue) => [
+      `${optionValue.productOptionId.toString()}:${optionValue.value.toLowerCase()}`,
+      optionValue,
+    ]),
+  );
+  const seenOptionIds = new Set();
   const normalizedOptionValues = [];
 
   for (const item of value) {
@@ -193,36 +219,57 @@ const normalizeVariantOptionValues = async (productId, value) => {
       throw new ApiError(400, 'optionValues must be an array of optionName/value pairs');
     }
 
+    const optionId = normalizeText(item.optionId);
+    const valueId = normalizeText(item.valueId);
     const optionName = normalizeText(item.optionName);
     const optionValue = normalizeText(item.value);
 
-    if (!optionName || !optionValue) {
-      throw new ApiError(400, 'optionValues must include optionName and value');
+    if ((!optionId && !optionName) || (!valueId && !optionValue)) {
+      throw new ApiError(400, 'optionValues must include optionId/valueId or optionName/value');
     }
 
     const optionNameKey = optionName.toLowerCase();
+    const productOption = optionId
+      ? optionById.get(optionId)
+      : optionByName.get(optionNameKey);
 
-    if (seenOptionNames.has(optionNameKey)) {
+    if (!productOption) {
+      throw new ApiError(400, `Product option "${optionName || optionId}" does not exist`);
+    }
+
+    const productOptionId = productOption._id.toString();
+
+    if (seenOptionIds.has(productOptionId)) {
       throw new ApiError(400, 'Each option can be used only once per variant');
     }
 
-    const productOption = optionByName.get(optionNameKey);
+    let productOptionValue = valueId
+      ? valueById.get(valueId)
+      : valueByOptionAndName.get(`${productOptionId}:${optionValue.toLowerCase()}`);
 
-    if (!productOption) {
-      throw new ApiError(400, `Product option "${optionName}" does not exist`);
+    if (productOptionValue && productOptionValue.productOptionId.toString() !== productOptionId) {
+      productOptionValue = null;
     }
-
-    const productOptionValue = await ProductOptionValue.findOne({
-      productOptionId: productOption._id,
-      value: new RegExp(`^${optionValue.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i'),
-    }).lean().exec();
 
     if (!productOptionValue) {
       throw new ApiError(400, `Product option value "${optionValue}" does not exist for "${productOption.name}"`);
     }
 
-    seenOptionNames.add(optionNameKey);
+    if (optionValue && optionValue.toLowerCase() !== productOptionValue.value.toLowerCase()) {
+      const matchingOptionValue = await ProductOptionValue.findOne({
+        productOptionId: productOption._id,
+        value: new RegExp(`^${escapeRegex(optionValue)}$`, 'i'),
+      }).lean().exec();
+
+      if (!matchingOptionValue || matchingOptionValue._id.toString() !== productOptionValue._id.toString()) {
+        throw new ApiError(400, `Product option value "${optionValue}" does not match valueId`);
+      }
+    }
+
+    seenOptionIds.add(productOptionId);
     normalizedOptionValues.push({
+      optionId: productOption._id,
+      valueId: productOptionValue._id,
       optionName: productOption.name,
       value: productOptionValue.value,
     });

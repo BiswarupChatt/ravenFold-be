@@ -412,6 +412,56 @@ const formatSeo = (seo = {}, product = {}) => ({
   noIndex: Boolean(seo.noIndex),
 });
 
+const formatProductOptionValue = (optionValue = {}) => ({
+  id: optionValue.id || optionValue._id?.toString(),
+  productOptionId: optionValue.productOptionId?.toString(),
+  value: optionValue.value,
+  label: optionValue.label || optionValue.value,
+  colorHex: optionValue.colorHex || '',
+  sortOrder: optionValue.sortOrder || 0,
+});
+
+const formatProductOption = (option = {}, values = []) => ({
+  id: option.id || option._id?.toString(),
+  productId: option.productId?.toString(),
+  name: option.name,
+  optionType: option.optionType || 'other',
+  displayStyle: option.displayStyle || (option.optionType === 'color' ? 'swatch' : 'button'),
+  sizeGuideImageUrl: option.sizeGuideImageUrl || '',
+  sortOrder: option.sortOrder || 0,
+  values: values.map(formatProductOptionValue),
+});
+
+const getProductOptions = async (productId) => {
+  const options = await ProductOption.find({ productId })
+    .sort({ sortOrder: 1, name: 1, createdAt: 1 })
+    .lean()
+    .exec();
+  const optionIds = options.map((option) => option._id);
+  const values = await ProductOptionValue.find({
+    productOptionId: {
+      $in: optionIds,
+    },
+  })
+    .sort({ sortOrder: 1, value: 1, createdAt: 1 })
+    .lean()
+    .exec();
+  const valuesByOptionId = new Map();
+
+  for (const value of values) {
+    const optionId = value.productOptionId.toString();
+    const optionValues = valuesByOptionId.get(optionId) || [];
+
+    optionValues.push(value);
+    valuesByOptionId.set(optionId, optionValues);
+  }
+
+  return options.map((option) => formatProductOption(
+    option,
+    valuesByOptionId.get(option._id.toString()) || [],
+  ));
+};
+
 const formatProduct = (product) => {
   const seo = formatSeo(product.seo || {}, product);
 
@@ -436,6 +486,7 @@ const formatProduct = (product) => {
     isFeatured: Boolean(product.isFeatured),
     tags: product.tags || [],
     attributes: product.attributes || [],
+    options: product.options || [],
     shipping: formatShipping(product.shipping || {}),
     createdAt: product.createdAt,
     updatedAt: product.updatedAt,
@@ -868,7 +919,10 @@ const getProduct = async (productIdOrSlug, options = {}) => {
     throw new ApiError(404, 'Product not found');
   }
 
-  return formatProduct(product);
+  return {
+    ...formatProduct(product),
+    options: await getProductOptions(product._id),
+  };
 };
 
 const updateProduct = async (productId, payload) => {

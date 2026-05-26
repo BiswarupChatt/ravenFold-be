@@ -4,6 +4,16 @@ import { dimensionUnits, shippingSchema, weightUnits } from '@/modules/product/m
 
 const variantOptionValueSchema = new mongoose.Schema(
   {
+    optionId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'ProductOption',
+      default: null,
+    },
+    valueId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'ProductOptionValue',
+      default: null,
+    },
     optionName: {
       type: String,
       required: true,

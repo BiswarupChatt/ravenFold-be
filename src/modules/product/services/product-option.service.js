@@ -2,7 +2,10 @@ import mongoose from 'mongoose';
 
 import ApiError from '@/common/errors/api.error.js';
 import ProductOptionValue from '@/modules/product/models/product-option-value.model.js';
-import ProductOption from '@/modules/product/models/product-option.model.js';
+import ProductOption, {
+  productOptionDisplayStyles,
+  productOptionTypes,
+} from '@/modules/product/models/product-option.model.js';
 import ProductVariant from '@/modules/product/models/product-variant.model.js';
 import Product from '@/modules/product/models/product.model.js';
 
@@ -32,6 +35,82 @@ const escapeRegex = (value) => {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 };
 
+const normalizeOptionType = (value) => {
+  const normalizedValue = normalizeText(value).toLowerCase();
+
+  if (!normalizedValue) {
+    return 'other';
+  }
+
+  if (!productOptionTypes.includes(normalizedValue)) {
+    throw new ApiError(400, `optionType must be one of: ${productOptionTypes.join(', ')}`);
+  }
+
+  return normalizedValue;
+};
+
+const normalizeDisplayStyle = (value, optionType = 'other') => {
+  const normalizedValue = normalizeText(value).toLowerCase();
+
+  if (!normalizedValue) {
+    return optionType === 'color' ? 'swatch' : 'button';
+  }
+
+  if (!productOptionDisplayStyles.includes(normalizedValue)) {
+    throw new ApiError(400, `displayStyle must be one of: ${productOptionDisplayStyles.join(', ')}`);
+  }
+
+  return normalizedValue;
+};
+
+const normalizeOptionalUrl = (value, field) => {
+  const normalizedValue = normalizeText(value);
+
+  if (!normalizedValue) {
+    return '';
+  }
+
+  try {
+    const parsedUrl = new URL(normalizedValue);
+
+    if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
+      throw new Error('Invalid protocol');
+    }
+  } catch {
+    throw new ApiError(400, `${field} must be a valid http or https URL`);
+  }
+
+  return normalizedValue;
+};
+
+const normalizeColorHex = (value) => {
+  const normalizedValue = normalizeText(value);
+
+  if (!normalizedValue) {
+    return '';
+  }
+
+  if (!/^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i.test(normalizedValue)) {
+    throw new ApiError(400, 'colorHex must be a valid hex color, for example #1e2952');
+  }
+
+  return normalizedValue.toUpperCase();
+};
+
+const normalizeSortOrder = (value, field = 'sortOrder') => {
+  if (value === null || value === undefined || value === '') {
+    return 0;
+  }
+
+  const numberValue = Number(value);
+
+  if (!Number.isInteger(numberValue) || numberValue < 0) {
+    throw new ApiError(400, `${field} must be a non-negative integer`);
+  }
+
+  return numberValue;
+};
+
 const assertProductExists = async (productId) => {
   assertValidObjectId(productId, 'product id');
 
@@ -46,6 +125,9 @@ const formatOptionValue = (optionValue) => ({
   id: optionValue.id || optionValue._id?.toString(),
   productOptionId: optionValue.productOptionId?.toString(),
   value: optionValue.value,
+  label: optionValue.label || optionValue.value,
+  colorHex: optionValue.colorHex || '',
+  sortOrder: optionValue.sortOrder || 0,
   createdAt: optionValue.createdAt,
   updatedAt: optionValue.updatedAt,
 });
@@ -54,6 +136,10 @@ const formatProductOption = (option, values = []) => ({
   id: option.id || option._id?.toString(),
   productId: option.productId?.toString(),
   name: option.name,
+  optionType: option.optionType || 'other',
+  displayStyle: option.displayStyle || (option.optionType === 'color' ? 'swatch' : 'button'),
+  sizeGuideImageUrl: option.sizeGuideImageUrl || '',
+  sortOrder: option.sortOrder || 0,
   values: values.map(formatOptionValue),
   createdAt: option.createdAt,
   updatedAt: option.updatedAt,
@@ -64,6 +150,28 @@ const normalizeOptionPayload = (payload = {}, { requireName = false } = {}) => {
 
   if (hasOwn(payload, 'name')) {
     optionPayload.name = normalizeText(payload.name);
+  }
+
+  if (hasOwn(payload, 'optionType')) {
+    optionPayload.optionType = normalizeOptionType(payload.optionType);
+  }
+
+  const effectiveOptionType = optionPayload.optionType || normalizeOptionType(payload.optionType);
+
+  if (hasOwn(payload, 'displayStyle')) {
+    optionPayload.displayStyle = normalizeDisplayStyle(payload.displayStyle, effectiveOptionType);
+  }
+
+  if (hasOwn(payload, 'optionType') && !hasOwn(payload, 'displayStyle')) {
+    optionPayload.displayStyle = normalizeDisplayStyle('', optionPayload.optionType);
+  }
+
+  if (hasOwn(payload, 'sizeGuideImageUrl')) {
+    optionPayload.sizeGuideImageUrl = normalizeOptionalUrl(payload.sizeGuideImageUrl, 'sizeGuideImageUrl');
+  }
+
+  if (hasOwn(payload, 'sortOrder')) {
+    optionPayload.sortOrder = normalizeSortOrder(payload.sortOrder);
   }
 
   if (requireName && !optionPayload.name) {
@@ -86,12 +194,28 @@ const normalizeOptionValuePayload = (payload = {}, { requireValue = false } = {}
     optionValuePayload.value = normalizeText(payload.value);
   }
 
+  if (hasOwn(payload, 'label')) {
+    optionValuePayload.label = normalizeText(payload.label);
+  }
+
+  if (hasOwn(payload, 'colorHex')) {
+    optionValuePayload.colorHex = normalizeColorHex(payload.colorHex);
+  }
+
+  if (hasOwn(payload, 'sortOrder')) {
+    optionValuePayload.sortOrder = normalizeSortOrder(payload.sortOrder, 'value sortOrder');
+  }
+
   if (requireValue && !optionValuePayload.value) {
     throw new ApiError(400, 'value is required');
   }
 
   if (hasOwn(optionValuePayload, 'value') && !optionValuePayload.value) {
     throw new ApiError(400, 'value cannot be empty');
+  }
+
+  if (!optionValuePayload.label && optionValuePayload.value) {
+    optionValuePayload.label = optionValuePayload.value;
   }
 
   return optionValuePayload;
@@ -104,12 +228,16 @@ const normalizeValues = (values = []) => {
 
   const rawValues = Array.isArray(values) ? values : [values];
   const normalizedValues = rawValues
-    .map((value) => normalizeText(typeof value === 'object' ? value.value : value))
-    .filter(Boolean);
+    .map((value) => (
+      typeof value === 'object'
+        ? normalizeOptionValuePayload(value, { requireValue: true })
+        : normalizeOptionValuePayload({ value }, { requireValue: true })
+    ))
+    .filter((value) => value.value);
   const seenValues = new Set();
 
-  return normalizedValues.filter((value) => {
-    const valueKey = value.toLowerCase();
+  return normalizedValues.filter((valuePayload) => {
+    const valueKey = valuePayload.value.toLowerCase();
 
     if (seenValues.has(valueKey)) {
       return false;
@@ -194,7 +322,7 @@ const getValuesByOptionIds = async (optionIds = []) => {
     productOptionId: {
       $in: optionIds,
     },
-  }).sort({ value: 1, createdAt: 1 }).lean().exec();
+  }).sort({ sortOrder: 1, value: 1, createdAt: 1 }).lean().exec();
   const valuesByOptionId = new Map();
 
   for (const value of values) {
@@ -208,10 +336,13 @@ const getValuesByOptionIds = async (optionIds = []) => {
   return valuesByOptionId;
 };
 
-const assertOptionIsNotUsedByVariants = async (productId, optionName) => {
+const assertOptionIsNotUsedByVariants = async (productId, option) => {
   const variantUsingOption = await ProductVariant.exists({
     productId,
-    'optionValues.optionName': optionName,
+    $or: [
+      { 'optionValues.optionName': option.name },
+      { 'optionValues.optionId': option._id },
+    ],
   }).exec();
 
   if (variantUsingOption) {
@@ -219,15 +350,27 @@ const assertOptionIsNotUsedByVariants = async (productId, optionName) => {
   }
 };
 
-const assertOptionValueIsNotUsedByVariants = async (productId, optionName, optionValue) => {
+const assertOptionValueIsNotUsedByVariants = async (productId, option, optionValue) => {
   const variantUsingOptionValue = await ProductVariant.exists({
     productId,
-    optionValues: {
-      $elemMatch: {
-        optionName,
-        value: optionValue,
+    $or: [
+      {
+        optionValues: {
+          $elemMatch: {
+            optionName: option.name,
+            value: optionValue.value,
+          },
+        },
       },
-    },
+      {
+        optionValues: {
+          $elemMatch: {
+            optionId: option._id,
+            valueId: optionValue._id,
+          },
+        },
+      },
+    ],
   }).exec();
 
   if (variantUsingOptionValue) {
@@ -260,13 +403,13 @@ const createProductOption = async (productId, payload) => {
 
   const values = [];
 
-  for (const value of normalizeValues(payload.values)) {
-    await assertOptionValueAvailable(option._id, value);
+  for (const valuePayload of normalizeValues(payload.values)) {
+    await assertOptionValueAvailable(option._id, valuePayload.value);
 
     try {
       values.push(await ProductOptionValue.create({
         productOptionId: option._id,
-        value,
+        ...valuePayload,
       }));
     } catch (error) {
       if (error?.code === 11000) {
@@ -284,7 +427,7 @@ const listProductOptions = async (productId) => {
   assertDatabaseReady();
   await assertProductExists(productId);
 
-  const options = await ProductOption.find({ productId }).sort({ name: 1, createdAt: 1 }).lean().exec();
+  const options = await ProductOption.find({ productId }).sort({ sortOrder: 1, name: 1, createdAt: 1 }).lean().exec();
   const valuesByOptionId = await getValuesByOptionIds(options.map((option) => option._id));
 
   return options.map((option) => formatProductOption(
@@ -296,7 +439,7 @@ const listProductOptions = async (productId) => {
 const getProductOption = async (productId, optionId) => {
   assertDatabaseReady();
   const option = await getOptionDocument(productId, optionId);
-  const values = await ProductOptionValue.find({ productOptionId: option._id }).sort({ value: 1, createdAt: 1 }).lean().exec();
+  const values = await ProductOptionValue.find({ productOptionId: option._id }).sort({ sortOrder: 1, value: 1, createdAt: 1 }).lean().exec();
 
   return formatProductOption(option, values);
 };
@@ -311,7 +454,7 @@ const updateProductOption = async (productId, optionId, payload) => {
   }
 
   if (hasOwn(optionPayload, 'name') && optionPayload.name !== option.name) {
-    await assertOptionIsNotUsedByVariants(productId, option.name);
+    await assertOptionIsNotUsedByVariants(productId, option);
     await assertOptionNameAvailable(productId, optionPayload.name, option._id);
   }
 
@@ -335,7 +478,7 @@ const deleteProductOption = async (productId, optionId) => {
   const option = await getOptionDocument(productId, optionId);
   const deletedOption = await getProductOption(productId, option._id);
 
-  await assertOptionIsNotUsedByVariants(productId, option.name);
+  await assertOptionIsNotUsedByVariants(productId, option);
   await ProductOptionValue.deleteMany({ productOptionId: option._id }).exec();
   await option.deleteOne();
 
@@ -371,7 +514,7 @@ const listProductOptionValues = async (productId, optionId) => {
   assertDatabaseReady();
   const option = await getOptionDocument(productId, optionId);
   const values = await ProductOptionValue.find({ productOptionId: option._id })
-    .sort({ value: 1, createdAt: 1 })
+    .sort({ sortOrder: 1, value: 1, createdAt: 1 })
     .lean()
     .exec();
 
@@ -395,7 +538,7 @@ const updateProductOptionValue = async (productId, optionId, valueId, payload) =
   }
 
   if (hasOwn(optionValuePayload, 'value') && optionValuePayload.value !== optionValue.value) {
-    await assertOptionValueIsNotUsedByVariants(productId, option.name, optionValue.value);
+    await assertOptionValueIsNotUsedByVariants(productId, option, optionValue);
     await assertOptionValueAvailable(option._id, optionValuePayload.value, optionValue._id);
   }
 
@@ -419,7 +562,7 @@ const deleteProductOptionValue = async (productId, optionId, valueId) => {
   const { option, optionValue } = await getOptionValueDocument(productId, optionId, valueId);
   const deletedOptionValue = formatOptionValue(optionValue);
 
-  await assertOptionValueIsNotUsedByVariants(productId, option.name, optionValue.value);
+  await assertOptionValueIsNotUsedByVariants(productId, option, optionValue);
   await optionValue.deleteOne();
 
   return deletedOptionValue;
