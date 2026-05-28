@@ -1,43 +1,14 @@
-import mongoose from 'mongoose';
-
 import ApiError from '@/common/errors/api.error.js';
 import { getPagination } from '@/common/utils/pagination.util.js';
+import {
+  assertDatabaseReady,
+  hasOwn,
+  normalizeObjectId,
+  normalizeOptionalObjectId,
+  normalizeText,
+} from '@/common/utils/service.util.js';
 import StockMovement from '@/modules/inventory/models/stock-movement.model.js';
 import { formatStockMovement } from '@/modules/inventory/services/inventory.service.js';
-
-const hasOwn = (source, field) => Object.prototype.hasOwnProperty.call(source, field);
-
-const assertDatabaseReady = () => {
-  if (mongoose.connection.readyState !== 1) {
-    throw new ApiError(503, 'Database connection is not ready. Check MONGO_URI and start MongoDB.');
-  }
-};
-
-const normalizeText = (value) => {
-  if (value === null || value === undefined) {
-    return '';
-  }
-
-  return String(value).trim();
-};
-
-const normalizeObjectId = (value, field) => {
-  const normalizedValue = normalizeText(value);
-
-  if (!mongoose.Types.ObjectId.isValid(normalizedValue)) {
-    throw new ApiError(400, `Invalid ${field}`);
-  }
-
-  return normalizedValue;
-};
-
-const normalizeOptionalObjectId = (value, field) => {
-  if (value === null || value === undefined || value === '') {
-    return null;
-  }
-
-  return normalizeObjectId(value, field);
-};
 
 const buildListFilter = (query = {}) => {
   const filter = {};

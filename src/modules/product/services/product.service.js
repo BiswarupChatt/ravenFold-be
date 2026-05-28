@@ -1,7 +1,19 @@
-import mongoose from 'mongoose';
-
 import ApiError from '@/common/errors/api.error.js';
 import { getPagination } from '@/common/utils/pagination.util.js';
+import {
+  assertDatabaseReady,
+  assertValidObjectId,
+  escapeRegex,
+  getDocumentId,
+  hasOwn,
+  isValidObjectId,
+  normalizeBoolean,
+  normalizeMoney,
+  normalizeOptionalNumber,
+  normalizeRequiredObjectId,
+  normalizeStringArray,
+  normalizeText,
+} from '@/common/utils/service.util.js';
 import { createSlug } from '@/common/utils/slug.util.js';
 import Category from '@/modules/category/models/category.model.js';
 import ProductOptionValue from '@/modules/product/models/product-option-value.model.js';
@@ -32,100 +44,8 @@ const editableProductFields = [
 
 const sortableProductFields = new Set(['name', 'createdAt', 'updatedAt', 'basePrice', 'salePrice']);
 
-const hasOwn = (object, field) => Object.prototype.hasOwnProperty.call(object, field);
-
-const assertDatabaseReady = () => {
-  if (mongoose.connection.readyState !== 1) {
-    throw new ApiError(503, 'Database connection is not ready. Check MONGO_URI and start MongoDB.');
-  }
-};
-
 const assertValidProductId = (productId) => {
-  if (!mongoose.Types.ObjectId.isValid(productId)) {
-    throw new ApiError(400, 'Invalid product id');
-  }
-};
-
-const normalizeText = (value) => {
-  if (value === null || value === undefined) {
-    return '';
-  }
-
-  return String(value).trim();
-};
-
-const normalizeBoolean = (value, field) => {
-  if (typeof value === 'boolean') {
-    return value;
-  }
-
-  if (typeof value === 'string') {
-    const normalizedValue = value.trim().toLowerCase();
-
-    if (normalizedValue === 'true') {
-      return true;
-    }
-
-    if (normalizedValue === 'false') {
-      return false;
-    }
-  }
-
-  throw new ApiError(400, `${field} must be a boolean`);
-};
-
-const normalizeRequiredObjectId = (value, field) => {
-  const normalizedValue = normalizeText(value);
-
-  if (!normalizedValue) {
-    throw new ApiError(400, `${field} is required`);
-  }
-
-  if (!mongoose.Types.ObjectId.isValid(normalizedValue)) {
-    throw new ApiError(400, `Invalid ${field}`);
-  }
-
-  return normalizedValue;
-};
-
-const normalizeMoney = (value, field, { required = false } = {}) => {
-  if (value === null || value === undefined || value === '') {
-    if (required) {
-      throw new ApiError(400, `${field} is required`);
-    }
-
-    return null;
-  }
-
-  const numberValue = Number(value);
-
-  if (!Number.isFinite(numberValue)) {
-    throw new ApiError(400, `${field} must be a number`);
-  }
-
-  if (numberValue < 0) {
-    throw new ApiError(400, `${field} cannot be negative`);
-  }
-
-  return Number(numberValue.toFixed(2));
-};
-
-const normalizeOptionalNumber = (value, field) => {
-  if (value === null || value === undefined || value === '') {
-    return null;
-  }
-
-  const numberValue = Number(value);
-
-  if (!Number.isFinite(numberValue)) {
-    throw new ApiError(400, `${field} must be a number`);
-  }
-
-  if (numberValue < 0) {
-    throw new ApiError(400, `${field} cannot be negative`);
-  }
-
-  return numberValue;
+  assertValidObjectId(productId, 'product id');
 };
 
 const normalizeStatus = (value) => {
@@ -136,28 +56,6 @@ const normalizeStatus = (value) => {
   }
 
   return normalizedValue;
-};
-
-const normalizeStringArray = (value, field, { splitString = false, lowercase = false } = {}) => {
-  if (value === null || value === undefined || value === '') {
-    return [];
-  }
-
-  const rawValues = Array.isArray(value)
-    ? value
-    : splitString
-      ? String(value).split(',')
-      : [value];
-  const normalizedValues = rawValues
-    .map((item) => normalizeText(item))
-    .filter(Boolean)
-    .map((item) => (lowercase ? item.toLowerCase() : item));
-
-  if (rawValues.length > 0 && normalizedValues.length === 0) {
-    throw new ApiError(400, `${field} cannot contain only empty values`);
-  }
-
-  return [...new Set(normalizedValues)];
 };
 
 const normalizeAttributes = (value) => {
@@ -359,22 +257,6 @@ const mergeSeo = (currentSeo = {}, nextSeo = {}) => ({
   canonicalUrl: hasOwn(nextSeo, 'canonicalUrl') ? nextSeo.canonicalUrl : currentSeo.canonicalUrl || '',
   noIndex: hasOwn(nextSeo, 'noIndex') ? nextSeo.noIndex : Boolean(currentSeo.noIndex),
 });
-
-const escapeRegex = (value) => {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-};
-
-const getDocumentId = (value) => {
-  if (!value) {
-    return null;
-  }
-
-  if (value._id) {
-    return value._id.toString();
-  }
-
-  return value.toString();
-};
 
 const formatCategorySummary = (category) => {
   if (!category || typeof category !== 'object' || !category._id || !category.name) {
@@ -902,7 +784,7 @@ const getProduct = async (productIdOrSlug, options = {}) => {
     throw new ApiError(400, 'Product id or slug is required');
   }
 
-  const filter = mongoose.Types.ObjectId.isValid(identifier)
+  const filter = isValidObjectId(identifier)
     ? { _id: identifier }
     : { slug: createSlug(identifier) };
 

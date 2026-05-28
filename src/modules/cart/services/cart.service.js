@@ -1,7 +1,17 @@
-import mongoose from 'mongoose';
-
 import ApiError from '@/common/errors/api.error.js';
 import { getPagination } from '@/common/utils/pagination.util.js';
+import {
+  assertDatabaseReady,
+  escapeRegex,
+  getDocumentId,
+  hasOwn,
+  isValidObjectId,
+  normalizeBoolean,
+  normalizeObjectId,
+  normalizeOptionalObjectId,
+  normalizePositiveInteger,
+  normalizeText,
+} from '@/common/utils/service.util.js';
 import CartItem from '@/modules/cart/models/cart-item.model.js';
 import Cart, { cartStatuses } from '@/modules/cart/models/cart.model.js';
 import InventoryStock from '@/modules/inventory/models/inventory.model.js';
@@ -11,74 +21,14 @@ import User from '@/modules/users/models/user.model.js';
 
 const DEFAULT_CURRENCY = 'INR';
 
-const assertDatabaseReady = () => {
-  if (mongoose.connection.readyState !== 1) {
-    throw new ApiError(503, 'Database connection is not ready. Check MONGO_URI and start MongoDB.');
-  }
-};
-
-const normalizeText = (value) => {
-  if (value === null || value === undefined) {
-    return '';
-  }
-
-  return String(value).trim();
-};
-
-const hasOwn = (source, field) => Object.prototype.hasOwnProperty.call(source, field);
-
-const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-
-const normalizeBoolean = (value, field) => {
-  if (typeof value === 'boolean') {
-    return value;
-  }
-
-  if (typeof value === 'string') {
-    const normalizedValue = value.trim().toLowerCase();
-
-    if (normalizedValue === 'true') {
-      return true;
-    }
-
-    if (normalizedValue === 'false') {
-      return false;
-    }
-  }
-
-  throw new ApiError(400, `${field} must be a boolean`);
-};
-
-const normalizeObjectId = (value, field) => {
-  const normalizedValue = normalizeText(value);
-
-  if (!mongoose.Types.ObjectId.isValid(normalizedValue)) {
-    throw new ApiError(400, `Invalid ${field}`);
-  }
-
-  return normalizedValue;
-};
-
-const normalizeOptionalObjectId = (value, field) => {
-  if (value === null || value === undefined || value === '') {
-    return null;
-  }
-
-  return normalizeObjectId(value, field);
-};
-
-const normalizePositiveInteger = (value, field = 'quantity') => {
-  const numberValue = Number(value);
-
-  if (!Number.isInteger(numberValue) || numberValue <= 0) {
-    throw new ApiError(400, `${field} must be a positive integer`);
-  }
-
-  return numberValue;
-};
-
 const normalizeUserId = (actor = null) => {
-  if (!actor?.id || !mongoose.Types.ObjectId.isValid(actor.id)) {
+  try {
+    if (!actor?.id) {
+      throw new Error('Missing actor id');
+    }
+
+    normalizeObjectId(actor.id, 'authenticated user');
+  } catch {
     throw new ApiError(401, 'Authentication required');
   }
 
@@ -93,18 +43,6 @@ const normalizeCartStatus = (value) => {
   }
 
   return normalizedStatus;
-};
-
-const getDocumentId = (value) => {
-  if (!value) {
-    return null;
-  }
-
-  if (typeof value === 'object' && value._id) {
-    return value._id.toString();
-  }
-
-  return value.toString();
 };
 
 const formatVariantLabel = (variant) => {
@@ -221,7 +159,7 @@ const buildAdminCartSearchFilter = async (searchValue = '') => {
     searchConditions.push({ _id: { $in: cartItemCartIds } });
   }
 
-  if (mongoose.Types.ObjectId.isValid(search)) {
+  if (isValidObjectId(search)) {
     searchConditions.push(
       { _id: search },
       { userId: search },

@@ -1,7 +1,16 @@
-import mongoose from 'mongoose';
-
 import ApiError from '@/common/errors/api.error.js';
 import { getPagination } from '@/common/utils/pagination.util.js';
+import {
+  assertDatabaseReady,
+  assertValidObjectId,
+  escapeRegex,
+  hasOwn,
+  normalizeBoolean,
+  normalizeMoney,
+  normalizeOptionalNumber,
+  normalizeStringArray,
+  normalizeText,
+} from '@/common/utils/service.util.js';
 import ProductOptionValue from '@/modules/product/models/product-option-value.model.js';
 import ProductOption from '@/modules/product/models/product-option.model.js';
 import ProductVariant, { dimensionUnits, weightUnits } from '@/modules/product/models/product-variant.model.js';
@@ -16,105 +25,6 @@ const editableVariantFields = [
   'shipping',
   'isActive',
 ];
-
-const hasOwn = (object, field) => Object.prototype.hasOwnProperty.call(object, field);
-
-const assertDatabaseReady = () => {
-  if (mongoose.connection.readyState !== 1) {
-    throw new ApiError(503, 'Database connection is not ready. Check MONGO_URI and start MongoDB.');
-  }
-};
-
-const assertValidObjectId = (value, field) => {
-  if (!mongoose.Types.ObjectId.isValid(value)) {
-    throw new ApiError(400, `Invalid ${field}`);
-  }
-};
-
-const normalizeText = (value) => {
-  if (value === null || value === undefined) {
-    return '';
-  }
-
-  return String(value).trim();
-};
-
-const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-
-const normalizeBoolean = (value, field) => {
-  if (typeof value === 'boolean') {
-    return value;
-  }
-
-  if (typeof value === 'string') {
-    const normalizedValue = value.trim().toLowerCase();
-
-    if (normalizedValue === 'true') {
-      return true;
-    }
-
-    if (normalizedValue === 'false') {
-      return false;
-    }
-  }
-
-  throw new ApiError(400, `${field} must be a boolean`);
-};
-
-const normalizeMoney = (value, field, { required = false } = {}) => {
-  if (value === null || value === undefined || value === '') {
-    if (required) {
-      throw new ApiError(400, `${field} is required`);
-    }
-
-    return null;
-  }
-
-  const numberValue = Number(value);
-
-  if (!Number.isFinite(numberValue)) {
-    throw new ApiError(400, `${field} must be a number`);
-  }
-
-  if (numberValue < 0) {
-    throw new ApiError(400, `${field} cannot be negative`);
-  }
-
-  return Number(numberValue.toFixed(2));
-};
-
-const normalizeOptionalNumber = (value, field) => {
-  if (value === null || value === undefined || value === '') {
-    return null;
-  }
-
-  const numberValue = Number(value);
-
-  if (!Number.isFinite(numberValue)) {
-    throw new ApiError(400, `${field} must be a number`);
-  }
-
-  if (numberValue < 0) {
-    throw new ApiError(400, `${field} cannot be negative`);
-  }
-
-  return numberValue;
-};
-
-const normalizeStringArray = (value, field) => {
-  if (value === null || value === undefined || value === '') {
-    return [];
-  }
-
-  const rawValues = Array.isArray(value) ? value : [value];
-  const normalizedValues = rawValues.map((item) => normalizeText(item)).filter(Boolean);
-
-  if (rawValues.length > 0 && normalizedValues.length === 0) {
-    throw new ApiError(400, `${field} cannot contain only empty values`);
-  }
-
-  return [...new Set(normalizedValues)];
-};
 
 const assertProductExists = async (productId) => {
   assertValidObjectId(productId, 'product id');

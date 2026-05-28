@@ -1,68 +1,27 @@
-import mongoose from 'mongoose';
-
 import ApiError from '@/common/errors/api.error.js';
 import { getPagination } from '@/common/utils/pagination.util.js';
+import {
+  assertDatabaseReady,
+  assertValidObjectId,
+  createObjectId,
+  escapeRegex,
+  hasOwn,
+  isValidObjectId,
+  normalizeBoolean,
+  normalizeOptionalObjectId,
+  normalizeText,
+} from '@/common/utils/service.util.js';
 import { createSlug } from '@/common/utils/slug.util.js';
 import Category from '@/modules/category/models/category.model.js';
 
 const editableCategoryFields = ['name', 'slug', 'parentCategoryId', 'image', 'isActive'];
 
-const assertDatabaseReady = () => {
-  if (mongoose.connection.readyState !== 1) {
-    throw new ApiError(503, 'Database connection is not ready. Check MONGO_URI and start MongoDB.');
-  }
-};
-
 const assertValidCategoryId = (categoryId) => {
-  if (!mongoose.Types.ObjectId.isValid(categoryId)) {
-    throw new ApiError(400, 'Invalid category id');
-  }
-};
-
-const normalizeText = (value) => {
-  if (value === null || value === undefined) {
-    return '';
-  }
-
-  return String(value).trim();
+  assertValidObjectId(categoryId, 'category id');
 };
 
 const normalizeOptionalParentCategoryId = (value) => {
-  if (value === null || value === undefined || value === '') {
-    return null;
-  }
-
-  const parentCategoryId = normalizeText(value);
-
-  if (!mongoose.Types.ObjectId.isValid(parentCategoryId)) {
-    throw new ApiError(400, 'Invalid parent category id');
-  }
-
-  return parentCategoryId;
-};
-
-const normalizeBoolean = (value, field) => {
-  if (typeof value === 'boolean') {
-    return value;
-  }
-
-  if (typeof value === 'string') {
-    const normalizedValue = value.trim().toLowerCase();
-
-    if (normalizedValue === 'true') {
-      return true;
-    }
-
-    if (normalizedValue === 'false') {
-      return false;
-    }
-  }
-
-  throw new ApiError(400, `${field} must be a boolean`);
-};
-
-const escapeRegex = (value) => {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return normalizeOptionalObjectId(value, 'parent category id');
 };
 
 const formatCategory = (category) => {
@@ -88,7 +47,7 @@ const buildCategoryPayload = (payload = {}, { requireName = false } = {}) => {
   const categoryPayload = {};
 
   for (const field of editableCategoryFields) {
-    if (!Object.prototype.hasOwnProperty.call(payload, field)) {
+    if (!hasOwn(payload, field)) {
       continue;
     }
 
@@ -114,7 +73,7 @@ const buildCategoryPayload = (payload = {}, { requireName = false } = {}) => {
     throw new ApiError(400, 'name is required');
   }
 
-  if (Object.prototype.hasOwnProperty.call(categoryPayload, 'name') && !categoryPayload.name) {
+  if (hasOwn(categoryPayload, 'name') && !categoryPayload.name) {
     throw new ApiError(400, 'name cannot be empty');
   }
 
@@ -122,7 +81,7 @@ const buildCategoryPayload = (payload = {}, { requireName = false } = {}) => {
     categoryPayload.slug = createSlug(categoryPayload.name);
   }
 
-  if (Object.prototype.hasOwnProperty.call(categoryPayload, 'slug') && !categoryPayload.slug) {
+  if (hasOwn(categoryPayload, 'slug') && !categoryPayload.slug) {
     throw new ApiError(400, 'slug cannot be empty');
   }
 
@@ -133,17 +92,17 @@ const buildListFilter = (query = {}, { includeInactive = false } = {}) => {
   const filter = {};
 
   if (includeInactive) {
-    if (Object.prototype.hasOwnProperty.call(query, 'isActive')) {
+    if (hasOwn(query, 'isActive')) {
       filter.isActive = normalizeBoolean(query.isActive, 'isActive');
     }
   } else {
     filter.isActive = true;
   }
 
-  if (Object.prototype.hasOwnProperty.call(query, 'parentCategoryId')) {
+  if (hasOwn(query, 'parentCategoryId')) {
     filter.parentCategoryId = normalizeOptionalParentCategoryId(query.parentCategoryId);
   } else if (
-    Object.prototype.hasOwnProperty.call(query, 'rootOnly') &&
+    hasOwn(query, 'rootOnly') &&
     normalizeBoolean(query.rootOnly, 'rootOnly')
   ) {
     filter.parentCategoryId = null;
@@ -222,7 +181,7 @@ const createCategory = async (payload) => {
   assertDatabaseReady();
   const categoryPayload = buildCategoryPayload(payload, { requireName: true });
 
-  await assertNoCircularParent(new mongoose.Types.ObjectId(), categoryPayload.parentCategoryId);
+  await assertNoCircularParent(createObjectId(), categoryPayload.parentCategoryId);
   await assertCategorySlugIsAvailable(categoryPayload.slug);
 
   const category = await Category.create(categoryPayload);
@@ -292,7 +251,7 @@ const getCategory = async (categoryIdOrSlug, options = {}) => {
     throw new ApiError(400, 'Category id or slug is required');
   }
 
-  const filter = mongoose.Types.ObjectId.isValid(identifier)
+  const filter = isValidObjectId(identifier)
     ? { _id: identifier }
     : { slug: createSlug(identifier) };
 

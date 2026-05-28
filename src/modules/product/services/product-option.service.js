@@ -1,6 +1,11 @@
-import mongoose from 'mongoose';
-
 import ApiError from '@/common/errors/api.error.js';
+import {
+  assertDatabaseReady,
+  assertValidObjectId,
+  escapeRegex,
+  hasOwn,
+  normalizeText,
+} from '@/common/utils/service.util.js';
 import ProductOptionValue from '@/modules/product/models/product-option-value.model.js';
 import ProductOption, {
   productOptionDisplayStyles,
@@ -8,32 +13,6 @@ import ProductOption, {
 } from '@/modules/product/models/product-option.model.js';
 import ProductVariant from '@/modules/product/models/product-variant.model.js';
 import Product from '@/modules/product/models/product.model.js';
-
-const hasOwn = (object, field) => Object.prototype.hasOwnProperty.call(object, field);
-
-const assertDatabaseReady = () => {
-  if (mongoose.connection.readyState !== 1) {
-    throw new ApiError(503, 'Database connection is not ready. Check MONGO_URI and start MongoDB.');
-  }
-};
-
-const assertValidObjectId = (value, field) => {
-  if (!mongoose.Types.ObjectId.isValid(value)) {
-    throw new ApiError(400, `Invalid ${field}`);
-  }
-};
-
-const normalizeText = (value) => {
-  if (value === null || value === undefined) {
-    return '';
-  }
-
-  return String(value).trim();
-};
-
-const escapeRegex = (value) => {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-};
 
 const normalizeOptionType = (value) => {
   const normalizedValue = normalizeText(value).toLowerCase();
