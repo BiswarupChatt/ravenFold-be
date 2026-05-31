@@ -367,6 +367,25 @@ const getOrderItems = async (orderId) => {
   return OrderItem.find({ orderId }).sort({ createdAt: 1 }).lean().exec();
 };
 
+const getOrderItemsByOrderIds = async (orderIds = []) => {
+  if (!orderIds.length) {
+    return new Map();
+  }
+
+  const items = await OrderItem.find({ orderId: { $in: orderIds } }).sort({ createdAt: 1 }).lean().exec();
+  const itemsByOrderId = new Map();
+
+  for (const item of items) {
+    const orderId = getDocumentId(item.orderId);
+    const currentItems = itemsByOrderId.get(orderId) || [];
+
+    currentItems.push(item);
+    itemsByOrderId.set(orderId, currentItems);
+  }
+
+  return itemsByOrderId;
+};
+
 const buildAdminOrderSearchFilter = async (searchValue = '') => {
   const search = normalizeText(searchValue);
 
@@ -609,9 +628,10 @@ const listCustomerOrders = async (actor, query = {}) => {
       .exec(),
     Order.countDocuments(filter).exec(),
   ]);
+  const itemsByOrderId = await getOrderItemsByOrderIds(orders.map((order) => order._id));
 
   return {
-    items: orders.map((order) => formatOrder(order)),
+    items: orders.map((order) => formatOrder(order, itemsByOrderId.get(getDocumentId(order._id)) || [])),
     pagination: {
       hasNextPage: page * limit < total,
       hasPrevPage: page > 1,
