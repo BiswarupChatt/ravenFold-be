@@ -579,6 +579,68 @@ const createCheckoutOrder = async (actor, payload = {}) => {
   }
 };
 
+const buildCustomerOrderFilter = (userId, query = {}) => {
+  const filter = { userId };
+  const status = normalizeText(query.status).toLowerCase();
+  const paymentStatus = normalizeText(query.paymentStatus).toLowerCase();
+
+  if (status && status !== 'all') {
+    filter.status = normalizeOrderStatus(status);
+  }
+
+  if (paymentStatus && paymentStatus !== 'all') {
+    filter.paymentStatus = normalizePaymentStatus(paymentStatus);
+  }
+
+  return filter;
+};
+
+const listCustomerOrders = async (actor, query = {}) => {
+  assertDatabaseReady();
+  const userId = normalizeUserId(actor);
+  const { limit, page, skip } = getPagination(query);
+  const filter = buildCustomerOrderFilter(userId, query);
+  const [orders, total] = await Promise.all([
+    Order.find(filter)
+      .sort({ placedAt: -1, createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .lean()
+      .exec(),
+    Order.countDocuments(filter).exec(),
+  ]);
+
+  return {
+    items: orders.map((order) => formatOrder(order)),
+    pagination: {
+      hasNextPage: page * limit < total,
+      hasPrevPage: page > 1,
+      limit,
+      page,
+      total,
+      totalPages: Math.ceil(total / limit),
+    },
+  };
+};
+
+const getCustomerOrder = async (actor, orderId) => {
+  assertDatabaseReady();
+  const userId = normalizeUserId(actor);
+  const normalizedOrderId = normalizeObjectId(orderId, 'order id');
+  const order = await Order.findOne({
+    _id: normalizedOrderId,
+    userId,
+  })
+    .lean()
+    .exec();
+
+  if (!order) {
+    throw new ApiError(404, 'Order not found');
+  }
+
+  return formatOrder(order, await getOrderItems(order._id));
+};
+
 const listAdminOrders = async (query = {}) => {
   assertDatabaseReady();
   const { limit, page, skip } = getPagination(query);
@@ -625,15 +687,19 @@ const getAdminOrder = async (orderId) => {
 export {
   createCheckoutOrder,
   getAdminOrder,
+  getCustomerOrder,
   getStatus,
   getStatusData,
+  listCustomerOrders,
   listAdminOrders,
 };
 
 export default {
   createCheckoutOrder,
   getAdminOrder,
+  getCustomerOrder,
   getStatus,
   getStatusData,
+  listCustomerOrders,
   listAdminOrders,
 };

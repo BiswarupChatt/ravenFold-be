@@ -23,6 +23,8 @@ router.get(
   asyncHandler(orderController.getAdminOrder),
 );
 
+router.get('/me', authenticateUser, asyncHandler(orderController.listCustomerOrders));
+router.get('/me/:orderId', authenticateUser, asyncHandler(orderController.getCustomerOrder));
 router.post('/checkout', authenticateUser, asyncHandler(orderController.createCheckoutOrder));
 
 export default router;
