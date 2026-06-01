@@ -1,6 +1,7 @@
 import mongoose from 'mongoose';
 
 import { ORDER_STATUS, PAYMENT_STATUS } from '@/common/constants/order.constant.js';
+import { PAYMENT_METHOD, PAYMENT_PROVIDER } from '@/common/constants/payment.constant.js';
 
 const addressSnapshotSchema = new mongoose.Schema(
   {
@@ -88,6 +89,35 @@ const orderSchema = new mongoose.Schema(
       enum: Object.values(PAYMENT_STATUS),
       default: PAYMENT_STATUS.PENDING,
       index: true,
+    },
+    paymentProvider: {
+      type: String,
+      enum: [...Object.values(PAYMENT_PROVIDER), ''],
+      trim: true,
+      default: '',
+      index: true,
+    },
+    paymentMethod: {
+      type: String,
+      enum: Object.values(PAYMENT_METHOD),
+      default: PAYMENT_METHOD.UNKNOWN,
+    },
+    providerOrderId: {
+      type: String,
+      trim: true,
+      default: '',
+      index: true,
+    },
+    providerPaymentId: {
+      type: String,
+      trim: true,
+      default: '',
+      index: true,
+    },
+    paymentFailureReason: {
+      type: String,
+      trim: true,
+      default: '',
     },
     currency: {
       type: String,

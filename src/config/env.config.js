@@ -26,6 +26,12 @@ export const cloudinaryCloudName = process.env.CLOUDINARY_CLOUD_NAME || '';
 export const cloudinaryApiKey = process.env.CLOUDINARY_API_KEY || '';
 export const cloudinaryApiSecret = process.env.CLOUDINARY_API_SECRET || '';
 export const cloudinaryUploadFolder = process.env.CLOUDINARY_UPLOAD_FOLDER || 'ravenfold/products';
+export const paymentDefaultProvider = process.env.PAYMENT_DEFAULT_PROVIDER || 'razorpay';
+export const juspayApiKey = process.env.JUSPAY_API_KEY || '';
+export const juspayBaseUrl = process.env.JUSPAY_BASE_URL || 'https://api.juspay.in';
+export const juspayMerchantId = process.env.JUSPAY_MERCHANT_ID || '';
+export const juspayResponseKey = process.env.JUSPAY_RESPONSE_KEY || '';
+export const juspayWebhookSecret = process.env.JUSPAY_WEBHOOK_SECRET || '';
 
 export default {
   apiPrefix,
@@ -40,9 +46,15 @@ export default {
   googleClientIds,
   jwtExpiresIn,
   jwtSecret,
+  juspayApiKey,
+  juspayBaseUrl,
+  juspayMerchantId,
+  juspayResponseKey,
+  juspayWebhookSecret,
   mongoDbName,
   mongoUri,
   nodeEnv,
+  paymentDefaultProvider,
   port,
   redisUrl,
 };
