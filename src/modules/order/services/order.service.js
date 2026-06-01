@@ -22,6 +22,9 @@ import Order from '@/modules/order/models/order.model.js';
 import inventoryService from '@/modules/inventory/services/inventory.service.js';
 import Product from '@/modules/product/models/product.model.js';
 import ProductVariant from '@/modules/product/models/product-variant.model.js';
+import Payment from '@/modules/payment/models/payment.model.js';
+import Refund from '@/modules/payment/models/refund.model.js';
+import { formatPayment, formatRefund } from '@/modules/payment/services/refund.service.js';
 import Address from '@/modules/users/models/address.model.js';
 import User from '@/modules/users/models/user.model.js';
 
@@ -314,7 +317,7 @@ const formatOrderItem = (item) => ({
   updatedAt: item.updatedAt,
 });
 
-const formatOrder = (order, items = []) => ({
+const formatOrder = (order, items = [], paymentDetails = {}) => ({
   id: order.id || order._id?.toString(),
   bagDiscount: order.bagDiscount,
   billingAddress: formatAddressSnapshot(order.billingAddress),
@@ -329,6 +332,7 @@ const formatOrder = (order, items = []) => ({
   notes: order.notes || '',
   orderNumber: order.orderNumber,
   paidAt: order.paidAt,
+  payment: paymentDetails.payment || null,
   paymentFailureReason: order.paymentFailureReason || '',
   paymentMethod: order.paymentMethod || '',
   paymentProvider: order.paymentProvider || '',
@@ -336,6 +340,7 @@ const formatOrder = (order, items = []) => ({
   placedAt: order.placedAt,
   providerOrderId: order.providerOrderId || '',
   providerPaymentId: order.providerPaymentId || '',
+  refunds: paymentDetails.refunds || [],
   shippingAddress: formatAddressSnapshot(order.shippingAddress),
   shippingCharge: order.shippingCharge,
   status: order.status,
@@ -363,13 +368,31 @@ const formatUserSummary = (user) => {
   };
 };
 
-const formatAdminOrder = (order, items = []) => ({
-  ...formatOrder(order, items),
+const formatAdminOrder = (order, items = [], paymentDetails = {}) => ({
+  ...formatOrder(order, items, paymentDetails),
   user: formatUserSummary(order.userId),
 });
 
 const getOrderItems = async (orderId) => {
   return OrderItem.find({ orderId }).sort({ createdAt: 1 }).lean().exec();
+};
+
+const getOrderPaymentDetails = async (orderId) => {
+  const payment = await Payment.findOne({ orderId }).sort({ paidAt: -1, createdAt: -1 }).lean().exec();
+
+  if (!payment) {
+    return {
+      payment: null,
+      refunds: [],
+    };
+  }
+
+  const refunds = await Refund.find({ paymentId: payment._id }).sort({ createdAt: -1 }).lean().exec();
+
+  return {
+    payment: formatPayment(payment),
+    refunds: refunds.map(formatRefund),
+  };
 };
 
 const getOrderItemsByOrderIds = async (orderIds = []) => {
@@ -663,7 +686,12 @@ const getCustomerOrder = async (actor, orderId) => {
     throw new ApiError(404, 'Order not found');
   }
 
-  return formatOrder(order, await getOrderItems(order._id));
+  const [items, paymentDetails] = await Promise.all([
+    getOrderItems(order._id),
+    getOrderPaymentDetails(order._id),
+  ]);
+
+  return formatOrder(order, items, paymentDetails);
 };
 
 const listAdminOrders = async (query = {}) => {
@@ -706,7 +734,12 @@ const getAdminOrder = async (orderId) => {
     throw new ApiError(404, 'Order not found');
   }
 
-  return formatAdminOrder(order, await getOrderItems(order._id));
+  const [items, paymentDetails] = await Promise.all([
+    getOrderItems(order._id),
+    getOrderPaymentDetails(order._id),
+  ]);
+
+  return formatAdminOrder(order, items, paymentDetails);
 };
 
 export {

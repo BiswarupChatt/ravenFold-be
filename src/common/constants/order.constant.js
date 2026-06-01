@@ -12,6 +12,7 @@ const PAYMENT_STATUS = Object.freeze({
   PENDING: 'pending',
   PAID: 'paid',
   FAILED: 'failed',
+  PARTIALLY_REFUNDED: 'partially_refunded',
   REFUNDED: 'refunded',
 });
 

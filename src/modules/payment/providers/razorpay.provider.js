@@ -22,6 +22,20 @@ const getAuthHeader = () => {
 
 const toSubunitAmount = (amount) => Math.round(Number(amount || 0) * 100);
 
+const normalizeRefundStatus = (status = '') => {
+  const normalizedStatus = String(status || '').toLowerCase();
+
+  if (normalizedStatus === 'processed') {
+    return 'processed';
+  }
+
+  if (normalizedStatus === 'failed') {
+    return 'failed';
+  }
+
+  return 'pending';
+};
+
 const normalizeMethod = (method = '') => {
   const normalizedMethod = String(method || '').toLowerCase();
 
@@ -77,6 +91,38 @@ const createPaymentSession = async ({ order, paymentAttempt, user }) => {
     providerSessionId: '',
     rawCreateResponse: providerOrder,
     status: PAYMENT_ATTEMPT_STATUS.CREATED,
+  };
+};
+
+const createRefund = async ({ amount, payment, reason = '' }) => {
+  assertProviderConfigured(paymentConfig.razorpay.keyId && paymentConfig.razorpay.keySecret, PAYMENT_PROVIDER.RAZORPAY);
+
+  if (!payment?.providerPaymentId) {
+    throw new ApiError(400, 'Razorpay payment id is required to create a refund');
+  }
+
+  const providerRefund = await postJson(
+    `${RAZORPAY_API_BASE_URL}/payments/${encodeURIComponent(payment.providerPaymentId)}/refund`,
+    {
+      amount: toSubunitAmount(amount),
+      notes: {
+        internal_order_id: payment.orderId.toString(),
+        internal_payment_id: payment._id.toString(),
+        reason,
+      },
+    },
+    {
+      headers: {
+        Authorization: getAuthHeader(),
+      },
+    },
+  );
+
+  return {
+    failureReason: providerRefund.error_description || '',
+    providerRefundId: providerRefund.id || '',
+    rawCreateResponse: providerRefund,
+    status: normalizeRefundStatus(providerRefund.status),
   };
 };
 
@@ -146,6 +192,7 @@ const handleWebhook = ({ headers, rawBody }) => {
 };
 
 export default {
+  createRefund,
   createPaymentSession,
   handleWebhook,
   name: PAYMENT_PROVIDER.RAZORPAY,

@@ -4,6 +4,8 @@ import {
   PAYMENT_ATTEMPT_STATUS,
   PAYMENT_METHOD,
   PAYMENT_PROVIDER,
+  PAYMENT_RECORD_STATUS,
+  REFUND_STATUS,
 } from '@/common/constants/payment.constant.js';
 import paymentConfig from '@/config/payment.config.js';
 import {
@@ -15,6 +17,7 @@ import {
 import OrderStatusHistory from '@/modules/order/models/order-status-history.model.js';
 import Order from '@/modules/order/models/order.model.js';
 import PaymentAttempt from '@/modules/payment/models/payment-attempt.model.js';
+import Payment from '@/modules/payment/models/payment.model.js';
 import { getPaymentProvider, listPaymentProviders } from '@/modules/payment/providers/payment-provider.registry.js';
 import User from '@/modules/users/models/user.model.js';
 
@@ -64,7 +67,9 @@ const getStatusData = () => ({
   defaultProvider: paymentConfig.defaultProvider,
   methods: Object.values(PAYMENT_METHOD),
   module: 'payments',
+  paymentStatuses: Object.values(PAYMENT_RECORD_STATUS),
   providers: listPaymentProviders(),
+  refundStatuses: Object.values(REFUND_STATUS),
 });
 
 const getUser = async (userId) => {
@@ -83,7 +88,7 @@ const getPayableOrder = async (actor, orderId) => {
     throw new ApiError(404, 'Order not found');
   }
 
-  if (order.paymentStatus === PAYMENT_STATUS.PAID) {
+  if ([PAYMENT_STATUS.PAID, PAYMENT_STATUS.PARTIALLY_REFUNDED, PAYMENT_STATUS.REFUNDED].includes(order.paymentStatus)) {
     throw new ApiError(409, 'Order is already paid');
   }
 
@@ -176,6 +181,42 @@ const appendOrderStatusHistory = async ({ actorId, fromPaymentStatus, fromStatus
   });
 };
 
+const createOrUpdatePaymentRecord = async ({ order, paymentAttempt, result }) => {
+  if (!paymentAttempt.providerPaymentId) {
+    return null;
+  }
+
+  return Payment.findOneAndUpdate(
+    {
+      paymentAttemptId: paymentAttempt._id,
+    },
+    {
+      $set: {
+        paymentMethod: paymentAttempt.paymentMethod || PAYMENT_METHOD.UNKNOWN,
+        providerOrderId: paymentAttempt.providerOrderId,
+        providerPaymentId: paymentAttempt.providerPaymentId,
+        rawProviderResponse: result.rawVerifyResponse || result.rawStatusResponse || null,
+        status: PAYMENT_RECORD_STATUS.PAID,
+      },
+      $setOnInsert: {
+        amount: paymentAttempt.amount,
+        currency: paymentAttempt.currency || order.currency || 'INR',
+        orderId: order._id,
+        paidAt: order.paidAt || new Date(),
+        paymentAttemptId: paymentAttempt._id,
+        provider: paymentAttempt.provider,
+        refundedAmount: 0,
+        userId: paymentAttempt.userId,
+      },
+    },
+    {
+      new: true,
+      setDefaultsOnInsert: true,
+      upsert: true,
+    },
+  ).exec();
+};
+
 const applyPaymentResultToOrder = async ({ actorId = null, order, paymentAttempt, result }) => {
   const fromStatus = order.status;
   const fromPaymentStatus = order.paymentStatus;
@@ -201,6 +242,12 @@ const applyPaymentResultToOrder = async ({ actorId = null, order, paymentAttempt
     if (order.status === ORDER_STATUS.PENDING) {
       order.status = ORDER_STATUS.CONFIRMED;
     }
+
+    await createOrUpdatePaymentRecord({
+      order,
+      paymentAttempt,
+      result,
+    });
   }
 
   if (result.status === PAYMENT_ATTEMPT_STATUS.FAILED && order.paymentStatus !== PAYMENT_STATUS.PAID) {

@@ -81,6 +81,10 @@ const createPaymentSession = async ({ order, paymentAttempt, user }) => {
   };
 };
 
+const createRefund = async () => {
+  throw new ApiError(501, 'Juspay refunds are not wired yet');
+};
+
 const fetchPaymentStatus = async ({ paymentAttempt }) => {
   const { baseUrl, merchantId } = paymentConfig.juspay;
   const statusResponse = await getJson(
@@ -126,6 +130,7 @@ const handleWebhook = ({ body }) => {
 };
 
 export default {
+  createRefund,
   createPaymentSession,
   fetchPaymentStatus,
   handleWebhook,
