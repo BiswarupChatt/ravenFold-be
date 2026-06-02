@@ -5,6 +5,14 @@ const getStatus = async (req, res) => {
   return sendSuccess(res, paymentService.getStatusData(), 'Payments module ready');
 };
 
+const listAdminPayments = async (req, res) => {
+  return sendSuccess(res, await paymentService.listAdminPayments(req.query), 'Payments fetched');
+};
+
+const listAdminPaymentAttempts = async (req, res) => {
+  return sendSuccess(res, await paymentService.listAdminPaymentAttempts(req.query), 'Payment attempts fetched');
+};
+
 const createPaymentSession = async (req, res) => {
   return sendSuccess(
     res,
@@ -48,6 +56,8 @@ export {
   getStatus,
   handleProviderWebhook,
   handleWebhook,
+  listAdminPaymentAttempts,
+  listAdminPayments,
   verifyPaymentAttempt,
 };
 
@@ -57,5 +67,7 @@ export default {
   getStatus,
   handleProviderWebhook,
   handleWebhook,
+  listAdminPaymentAttempts,
+  listAdminPayments,
   verifyPaymentAttempt,
 };

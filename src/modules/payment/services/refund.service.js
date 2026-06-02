@@ -2,6 +2,7 @@ import ApiError from '@/common/errors/api.error.js';
 import { PAYMENT_STATUS } from '@/common/constants/order.constant.js';
 import {
   PAYMENT_RECORD_STATUS,
+  PAYMENT_PROVIDER,
   REFUND_STATUS,
 } from '@/common/constants/payment.constant.js';
 import { getPagination } from '@/common/utils/pagination.util.js';
@@ -27,13 +28,81 @@ const normalizeActorId = (actor = null) => {
   return normalizeObjectId(actor.id, 'authenticated user');
 };
 
+const formatUserSummary = (user) => {
+  if (!user || typeof user !== 'object' || !user._id) {
+    return null;
+  }
+
+  return {
+    avatar: user.avatar || '',
+    email: user.email || '',
+    id: user._id.toString(),
+    name: user.name || '',
+    phone: user.phone || '',
+  };
+};
+
+const formatAddressSnapshot = (address) => {
+  if (!address || typeof address !== 'object') {
+    return null;
+  }
+
+  return {
+    addressLine1: address.addressLine1 || '',
+    addressLine2: address.addressLine2 || '',
+    addressType: address.addressType || '',
+    city: address.city || '',
+    country: address.country || '',
+    fullName: address.fullName || '',
+    phone: address.phone || '',
+    pincode: address.pincode || '',
+    state: address.state || '',
+  };
+};
+
+const formatOrderSummary = (order) => {
+  if (!order || typeof order !== 'object' || !order._id) {
+    return null;
+  }
+
+  return {
+    currency: order.currency || 'INR',
+    id: order._id.toString(),
+    orderNumber: order.orderNumber || '',
+    paidAt: order.paidAt,
+    paymentStatus: order.paymentStatus || '',
+    placedAt: order.placedAt,
+    shippingAddress: formatAddressSnapshot(order.shippingAddress),
+    status: order.status || '',
+    totalPayable: order.totalPayable,
+    user: formatUserSummary(order.userId),
+  };
+};
+
+const formatPaymentSummary = (payment) => {
+  if (!payment || typeof payment !== 'object' || !payment._id) {
+    return null;
+  }
+
+  return {
+    amount: payment.amount,
+    currency: payment.currency,
+    id: payment._id.toString(),
+    providerPaymentId: payment.providerPaymentId || '',
+    refundedAmount: payment.refundedAmount || 0,
+    status: payment.status || '',
+  };
+};
+
 const formatRefund = (refund) => ({
   amount: refund.amount,
   createdAt: refund.createdAt,
   currency: refund.currency,
   failureReason: refund.failureReason || '',
   id: refund.id || refund._id?.toString(),
+  order: formatOrderSummary(refund.orderId),
   orderId: getDocumentId(refund.orderId),
+  payment: formatPaymentSummary(refund.paymentId),
   paymentId: getDocumentId(refund.paymentId),
   processedAt: refund.processedAt,
   provider: refund.provider,
@@ -41,8 +110,10 @@ const formatRefund = (refund) => ({
   providerRefundId: refund.providerRefundId || '',
   reason: refund.reason || '',
   requestedBy: getDocumentId(refund.requestedBy),
+  requestedByUser: formatUserSummary(refund.requestedBy),
   status: refund.status,
   updatedAt: refund.updatedAt,
+  user: formatUserSummary(refund.userId),
   userId: getDocumentId(refund.userId),
 });
 
@@ -77,6 +148,39 @@ const resolveRefundStatus = (value = '') => {
   }
 
   return status;
+};
+
+const resolveRefundProvider = (value = '') => {
+  const provider = normalizeText(value).toLowerCase();
+
+  if (!provider || provider === 'all') {
+    return '';
+  }
+
+  if (!Object.values(PAYMENT_PROVIDER).includes(provider)) {
+    throw new ApiError(400, `provider must be one of: ${Object.values(PAYMENT_PROVIDER).join(', ')}`);
+  }
+
+  return provider;
+};
+
+const buildRefundSearchFilter = (value = '') => {
+  const search = normalizeText(value);
+
+  if (!search) {
+    return null;
+  }
+
+  const searchRegex = new RegExp(search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+
+  return {
+    $or: [
+      { failureReason: searchRegex },
+      { providerPaymentId: searchRegex },
+      { providerRefundId: searchRegex },
+      { reason: searchRegex },
+    ],
+  };
 };
 
 const getPaymentRecordStatus = (payment) => {
@@ -254,8 +358,14 @@ const createAdminRefund = async (actor, payload = {}) => {
 const listAdminRefunds = async (query = {}) => {
   assertDatabaseReady();
   const { limit, page, skip } = getPagination(query);
+  const provider = resolveRefundProvider(query.provider);
   const status = resolveRefundStatus(query.status);
+  const searchFilter = buildRefundSearchFilter(query.search);
   const filter = {};
+
+  if (provider) {
+    filter.provider = provider;
+  }
 
   if (status) {
     filter.status = status;
@@ -269,8 +379,20 @@ const listAdminRefunds = async (query = {}) => {
     filter.paymentId = normalizeObjectId(query.paymentId, 'payment id');
   }
 
+  if (searchFilter) {
+    Object.assign(filter, searchFilter);
+  }
+
   const [refunds, total] = await Promise.all([
     Refund.find(filter)
+      .populate({
+        path: 'orderId',
+        populate: { path: 'userId', select: 'name email phone avatar' },
+        select: 'currency orderNumber paidAt paymentStatus placedAt shippingAddress status totalPayable userId',
+      })
+      .populate({ path: 'paymentId', select: 'amount currency providerPaymentId refundedAmount status' })
+      .populate({ path: 'requestedBy', select: 'name email phone avatar' })
+      .populate({ path: 'userId', select: 'name email phone avatar' })
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit)

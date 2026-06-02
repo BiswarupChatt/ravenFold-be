@@ -8,9 +8,11 @@ import {
   REFUND_STATUS,
 } from '@/common/constants/payment.constant.js';
 import paymentConfig from '@/config/payment.config.js';
+import { getPagination } from '@/common/utils/pagination.util.js';
 import {
   assertDatabaseReady,
   getDocumentId,
+  isValidObjectId,
   normalizeObjectId,
   normalizeText,
 } from '@/common/utils/service.util.js';
@@ -62,6 +64,84 @@ const formatPaymentAttempt = (attempt) => ({
   userId: getDocumentId(attempt.userId),
 });
 
+const formatUserSummary = (user) => {
+  if (!user || typeof user !== 'object' || !user._id) {
+    return null;
+  }
+
+  return {
+    avatar: user.avatar || '',
+    email: user.email || '',
+    id: user._id.toString(),
+    name: user.name || '',
+    phone: user.phone || '',
+  };
+};
+
+const formatAddressSnapshot = (address) => {
+  if (!address || typeof address !== 'object') {
+    return null;
+  }
+
+  return {
+    addressLine1: address.addressLine1 || '',
+    addressLine2: address.addressLine2 || '',
+    addressType: address.addressType || '',
+    city: address.city || '',
+    country: address.country || '',
+    fullName: address.fullName || '',
+    phone: address.phone || '',
+    pincode: address.pincode || '',
+    state: address.state || '',
+  };
+};
+
+const formatOrderSummary = (order) => {
+  if (!order || typeof order !== 'object' || !order._id) {
+    return null;
+  }
+
+  return {
+    currency: order.currency || 'INR',
+    id: order._id.toString(),
+    orderNumber: order.orderNumber || '',
+    paidAt: order.paidAt,
+    paymentStatus: order.paymentStatus || '',
+    placedAt: order.placedAt,
+    shippingAddress: formatAddressSnapshot(order.shippingAddress),
+    status: order.status || '',
+    totalPayable: order.totalPayable,
+    user: formatUserSummary(order.userId),
+  };
+};
+
+const formatAdminPaymentAttempt = (attempt) => ({
+  ...formatPaymentAttempt(attempt),
+  order: formatOrderSummary(attempt.orderId),
+  user: formatUserSummary(attempt.userId),
+});
+
+const formatAdminPayment = (payment) => ({
+  amount: payment.amount,
+  createdAt: payment.createdAt,
+  currency: payment.currency,
+  id: payment.id || payment._id?.toString(),
+  order: formatOrderSummary(payment.orderId),
+  orderId: getDocumentId(payment.orderId),
+  paidAt: payment.paidAt,
+  paymentAttemptId: getDocumentId(payment.paymentAttemptId),
+  paymentMethod: payment.paymentMethod || PAYMENT_METHOD.UNKNOWN,
+  provider: payment.provider,
+  providerOrderId: payment.providerOrderId || '',
+  providerPaymentId: payment.providerPaymentId || '',
+  refundableAmount: Number(Math.max(Number(payment.amount || 0) - Number(payment.refundedAmount || 0), 0).toFixed(2)),
+  refundedAmount: payment.refundedAmount || 0,
+  status: payment.status,
+  updatedAt: payment.updatedAt,
+  user: formatUserSummary(payment.userId),
+  userId: getDocumentId(payment.userId),
+});
+
 const getStatusData = () => ({
   attemptStatuses: Object.values(PAYMENT_ATTEMPT_STATUS),
   defaultProvider: paymentConfig.defaultProvider,
@@ -71,6 +151,186 @@ const getStatusData = () => ({
   providers: listPaymentProviders(),
   refundStatuses: Object.values(REFUND_STATUS),
 });
+
+const normalizeAdminProvider = (providerName = '') => {
+  const provider = normalizeText(providerName).toLowerCase();
+
+  if (!provider || provider === 'all') {
+    return '';
+  }
+
+  if (!Object.values(PAYMENT_PROVIDER).includes(provider)) {
+    throw new ApiError(400, `provider must be one of: ${Object.values(PAYMENT_PROVIDER).join(', ')}`);
+  }
+
+  return provider;
+};
+
+const normalizeAdminPaymentStatus = (statusValue = '') => {
+  const status = normalizeText(statusValue).toLowerCase();
+
+  if (!status || status === 'all') {
+    return '';
+  }
+
+  if (!Object.values(PAYMENT_RECORD_STATUS).includes(status)) {
+    throw new ApiError(400, `status must be one of: ${Object.values(PAYMENT_RECORD_STATUS).join(', ')}`);
+  }
+
+  return status;
+};
+
+const normalizeAdminAttemptStatus = (statusValue = '') => {
+  const status = normalizeText(statusValue).toLowerCase();
+
+  if (!status || status === 'all') {
+    return '';
+  }
+
+  if (!Object.values(PAYMENT_ATTEMPT_STATUS).includes(status)) {
+    throw new ApiError(400, `status must be one of: ${Object.values(PAYMENT_ATTEMPT_STATUS).join(', ')}`);
+  }
+
+  return status;
+};
+
+const buildRegexSearch = (search = '', fields = []) => {
+  const searchValue = normalizeText(search);
+
+  if (!searchValue) {
+    return null;
+  }
+
+  const searchRegex = new RegExp(searchValue.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+  const conditions = fields.map((field) => ({ [field]: searchRegex }));
+
+  if (isValidObjectId(searchValue)) {
+    conditions.push({ _id: searchValue });
+  }
+
+  return {
+    $or: conditions,
+  };
+};
+
+const listAdminPayments = async (query = {}) => {
+  assertDatabaseReady();
+  const { limit, page, skip } = getPagination(query);
+  const filter = {};
+  const provider = normalizeAdminProvider(query.provider);
+  const status = normalizeAdminPaymentStatus(query.status);
+  const searchFilter = buildRegexSearch(query.search, ['providerOrderId', 'providerPaymentId']);
+
+  if (provider) {
+    filter.provider = provider;
+  }
+
+  if (status) {
+    filter.status = status;
+  }
+
+  if (query.orderId) {
+    filter.orderId = normalizeObjectId(query.orderId, 'order id');
+  }
+
+  if (query.userId) {
+    filter.userId = normalizeObjectId(query.userId, 'user id');
+  }
+
+  if (searchFilter) {
+    Object.assign(filter, searchFilter);
+  }
+
+  const [payments, total] = await Promise.all([
+    Payment.find(filter)
+      .populate({
+        path: 'orderId',
+        populate: { path: 'userId', select: 'name email phone avatar' },
+        select: 'currency orderNumber paidAt paymentStatus placedAt shippingAddress status totalPayable userId',
+      })
+      .populate({ path: 'userId', select: 'name email phone avatar' })
+      .sort({ paidAt: -1, createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .lean()
+      .exec(),
+    Payment.countDocuments(filter).exec(),
+  ]);
+
+  return {
+    items: payments.map(formatAdminPayment),
+    pagination: {
+      hasNextPage: page * limit < total,
+      hasPrevPage: page > 1,
+      limit,
+      page,
+      total,
+      totalPages: Math.ceil(total / limit),
+    },
+  };
+};
+
+const listAdminPaymentAttempts = async (query = {}) => {
+  assertDatabaseReady();
+  const { limit, page, skip } = getPagination(query);
+  const filter = {};
+  const provider = normalizeAdminProvider(query.provider);
+  const status = normalizeAdminAttemptStatus(query.status);
+  const searchFilter = buildRegexSearch(query.search, [
+    'failureReason',
+    'providerOrderId',
+    'providerPaymentId',
+    'providerSessionId',
+  ]);
+
+  if (provider) {
+    filter.provider = provider;
+  }
+
+  if (status) {
+    filter.status = status;
+  }
+
+  if (query.orderId) {
+    filter.orderId = normalizeObjectId(query.orderId, 'order id');
+  }
+
+  if (query.userId) {
+    filter.userId = normalizeObjectId(query.userId, 'user id');
+  }
+
+  if (searchFilter) {
+    Object.assign(filter, searchFilter);
+  }
+
+  const [attempts, total] = await Promise.all([
+    PaymentAttempt.find(filter)
+      .populate({
+        path: 'orderId',
+        populate: { path: 'userId', select: 'name email phone avatar' },
+        select: 'currency orderNumber paidAt paymentStatus placedAt shippingAddress status totalPayable userId',
+      })
+      .populate({ path: 'userId', select: 'name email phone avatar' })
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .lean()
+      .exec(),
+    PaymentAttempt.countDocuments(filter).exec(),
+  ]);
+
+  return {
+    items: attempts.map(formatAdminPaymentAttempt),
+    pagination: {
+      hasNextPage: page * limit < total,
+      hasPrevPage: page > 1,
+      limit,
+      page,
+      total,
+      totalPages: Math.ceil(total / limit),
+    },
+  };
+};
 
 const getUser = async (userId) => {
   return User.findById(userId).select('name email phone').lean().exec();
@@ -401,6 +661,8 @@ export {
   createPaymentSession,
   getStatusData,
   handleProviderWebhook,
+  listAdminPaymentAttempts,
+  listAdminPayments,
   processWebhook,
   refreshPaymentAttemptStatus,
   verifyPaymentAttempt,
@@ -410,6 +672,8 @@ export default {
   createPaymentSession,
   getStatusData,
   handleProviderWebhook,
+  listAdminPaymentAttempts,
+  listAdminPayments,
   processWebhook,
   refreshPaymentAttemptStatus,
   verifyPaymentAttempt,
