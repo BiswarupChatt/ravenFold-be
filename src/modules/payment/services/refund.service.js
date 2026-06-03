@@ -1,5 +1,5 @@
 import ApiError from '@/common/errors/api.error.js';
-import { PAYMENT_STATUS } from '@/common/constants/order.constant.js';
+import { ORDER_STATUS, PAYMENT_STATUS } from '@/common/constants/order.constant.js';
 import {
   PAYMENT_RECORD_STATUS,
   PAYMENT_PROVIDER,
@@ -100,6 +100,7 @@ const formatRefund = (refund) => ({
   currency: refund.currency,
   failureReason: refund.failureReason || '',
   id: refund.id || refund._id?.toString(),
+  metadata: refund.metadata || null,
   order: formatOrderSummary(refund.orderId),
   orderId: getDocumentId(refund.orderId),
   payment: formatPaymentSummary(refund.paymentId),
@@ -212,22 +213,84 @@ const getOrderPaymentStatus = (payment) => {
   return PAYMENT_STATUS.PAID;
 };
 
-const updatePaymentAndOrderRefundState = async ({ actorId = null, order, payment }) => {
+const normalizeRefundOrderStatus = (value = '') => {
+  const status = normalizeText(value).toLowerCase();
+
+  if (!status) {
+    throw new ApiError(400, `orderStatus is required and must be one of: ${ORDER_STATUS.CANCELLED}, ${ORDER_STATUS.RETURNED}`);
+  }
+
+  if (![ORDER_STATUS.CANCELLED, ORDER_STATUS.RETURNED].includes(status)) {
+    throw new ApiError(400, `orderStatus must be one of: ${ORDER_STATUS.CANCELLED}, ${ORDER_STATUS.RETURNED}`);
+  }
+
+  return status;
+};
+
+const updateOrderStatusForRefundInitiation = async ({
+  actorId = null,
+  note = '',
+  order,
+  targetOrderStatus = '',
+}) => {
+  if (!targetOrderStatus || order.status === targetOrderStatus) {
+    return;
+  }
+
   const fromPaymentStatus = order.paymentStatus;
+  const fromStatus = order.status;
+
+  order.status = targetOrderStatus;
+
+  if (targetOrderStatus === ORDER_STATUS.CANCELLED && !order.cancelledAt) {
+    order.cancelledAt = new Date();
+  }
+
+  await order.save();
+
+  await OrderStatusHistory.create({
+    createdBy: actorId,
+    fromPaymentStatus,
+    fromStatus,
+    note: note || `Refund initiated; order marked ${targetOrderStatus}`,
+    orderId: order._id,
+    toPaymentStatus: order.paymentStatus,
+    toStatus: order.status,
+  });
+};
+
+const updatePaymentAndOrderRefundState = async ({
+  actorId = null,
+  note = '',
+  order,
+  payment,
+  targetOrderStatus = '',
+}) => {
+  const fromPaymentStatus = order.paymentStatus;
+  const fromStatus = order.status;
   const nextPaymentStatus = getOrderPaymentStatus(payment);
+  const nextOrderStatus = targetOrderStatus || order.status;
 
   payment.status = getPaymentRecordStatus(payment);
   await payment.save();
 
-  if (order.paymentStatus !== nextPaymentStatus) {
+  if (order.paymentStatus !== nextPaymentStatus || order.status !== nextOrderStatus) {
+    if (order.status !== nextOrderStatus) {
+      order.status = nextOrderStatus;
+
+      if (nextOrderStatus === ORDER_STATUS.CANCELLED && !order.cancelledAt) {
+        order.cancelledAt = new Date();
+      }
+    }
+
     order.paymentStatus = nextPaymentStatus;
     await order.save();
 
     await OrderStatusHistory.create({
       createdBy: actorId,
       fromPaymentStatus,
-      fromStatus: order.status,
-      note: `Payment refund updated: ${payment.status}`,
+      fromStatus,
+      note: note || `Payment refund updated: ${payment.status}`,
       orderId: order._id,
       toPaymentStatus: order.paymentStatus,
       toStatus: order.status,
@@ -291,6 +354,7 @@ const createAdminRefund = async (actor, payload = {}) => {
     throw new ApiError(404, 'Order not found for this payment');
   }
 
+  const targetOrderStatus = normalizeRefundOrderStatus(payload.orderStatus);
   const requestedAmount = normalizeMoney(payload.amount, 'amount');
   const amount = requestedAmount === null ? refundableAmount : requestedAmount;
 
@@ -308,6 +372,9 @@ const createAdminRefund = async (actor, payload = {}) => {
     currency: payment.currency,
     orderId: payment.orderId,
     paymentId: payment._id,
+    metadata: {
+      orderStatus: targetOrderStatus,
+    },
     provider: payment.provider,
     providerPaymentId: payment.providerPaymentId,
     reason,
@@ -338,7 +405,20 @@ const createAdminRefund = async (actor, payload = {}) => {
     if (refund.status === REFUND_STATUS.PROCESSED) {
       refund.processedAt = new Date();
       payment.refundedAmount = Number((Number(payment.refundedAmount || 0) + amount).toFixed(2));
-      await updatePaymentAndOrderRefundState({ actorId, order, payment });
+      await updatePaymentAndOrderRefundState({
+        actorId,
+        note: `Refund ${refund.providerRefundId || refund._id.toString()} processed; order marked ${targetOrderStatus}`,
+        order,
+        payment,
+        targetOrderStatus,
+      });
+    } else if (refund.status === REFUND_STATUS.PENDING) {
+      await updateOrderStatusForRefundInitiation({
+        actorId,
+        note: `Refund ${refund.providerRefundId || refund._id.toString()} initiated; order marked ${targetOrderStatus}`,
+        order,
+        targetOrderStatus,
+      });
     }
 
     await refund.save();
