@@ -194,18 +194,54 @@ const normalizeAdminAttemptStatus = (statusValue = '') => {
   return status;
 };
 
-const buildRegexSearch = (search = '', fields = []) => {
+const escapeRegex = (value = '') => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+const buildAdminPaymentSearchFilter = async (search = '', fields = []) => {
   const searchValue = normalizeText(search);
 
   if (!searchValue) {
     return null;
   }
 
-  const searchRegex = new RegExp(searchValue.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+  const searchRegex = new RegExp(escapeRegex(searchValue), 'i');
   const conditions = fields.map((field) => ({ [field]: searchRegex }));
+  const objectIdSearch = isValidObjectId(searchValue);
+  const [users, orders] = await Promise.all([
+    User.find({
+      $or: [
+        { email: searchRegex },
+        { name: searchRegex },
+        { phone: searchRegex },
+      ],
+    }).select('_id').limit(100).lean().exec(),
+    Order.find({
+      $or: [
+        { orderNumber: searchRegex },
+        { 'shippingAddress.fullName': searchRegex },
+        { 'shippingAddress.phone': searchRegex },
+        ...(objectIdSearch ? [{ _id: searchValue }] : []),
+      ],
+    }).select('_id').limit(100).lean().exec(),
+  ]);
+  const userIds = users.map((user) => user._id);
+  const orderIds = orders.map((order) => order._id);
 
-  if (isValidObjectId(searchValue)) {
+  if (objectIdSearch) {
     conditions.push({ _id: searchValue });
+    conditions.push({ orderId: searchValue });
+    conditions.push({ userId: searchValue });
+  }
+
+  if (userIds.length > 0) {
+    conditions.push({ userId: { $in: userIds } });
+  }
+
+  if (orderIds.length > 0) {
+    conditions.push({ orderId: { $in: orderIds } });
+  }
+
+  if (conditions.length === 0) {
+    return null;
   }
 
   return {
@@ -219,7 +255,7 @@ const listAdminPayments = async (query = {}) => {
   const filter = {};
   const provider = normalizeAdminProvider(query.provider);
   const status = normalizeAdminPaymentStatus(query.status);
-  const searchFilter = buildRegexSearch(query.search, ['providerOrderId', 'providerPaymentId']);
+  const searchFilter = await buildAdminPaymentSearchFilter(query.search, ['providerOrderId', 'providerPaymentId']);
 
   if (provider) {
     filter.provider = provider;
@@ -276,7 +312,7 @@ const listAdminPaymentAttempts = async (query = {}) => {
   const filter = {};
   const provider = normalizeAdminProvider(query.provider);
   const status = normalizeAdminAttemptStatus(query.status);
-  const searchFilter = buildRegexSearch(query.search, [
+  const searchFilter = await buildAdminPaymentSearchFilter(query.search, [
     'failureReason',
     'providerOrderId',
     'providerPaymentId',

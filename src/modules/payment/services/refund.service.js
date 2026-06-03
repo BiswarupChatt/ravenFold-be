@@ -9,6 +9,7 @@ import { getPagination } from '@/common/utils/pagination.util.js';
 import {
   assertDatabaseReady,
   getDocumentId,
+  isValidObjectId,
   normalizeMoney,
   normalizeObjectId,
   normalizeOptionalObjectId,
@@ -19,6 +20,7 @@ import OrderStatusHistory from '@/modules/order/models/order-status-history.mode
 import Payment from '@/modules/payment/models/payment.model.js';
 import Refund from '@/modules/payment/models/refund.model.js';
 import { getPaymentProvider } from '@/modules/payment/providers/payment-provider.registry.js';
+import User from '@/modules/users/models/user.model.js';
 
 const normalizeActorId = (actor = null) => {
   if (!actor?.id) {
@@ -165,22 +167,60 @@ const resolveRefundProvider = (value = '') => {
   return provider;
 };
 
-const buildRefundSearchFilter = (value = '') => {
+const escapeRegex = (value = '') => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+const buildRefundSearchFilter = async (value = '') => {
   const search = normalizeText(value);
 
   if (!search) {
     return null;
   }
 
-  const searchRegex = new RegExp(search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+  const searchRegex = new RegExp(escapeRegex(search), 'i');
+  const objectIdSearch = isValidObjectId(search);
+  const [users, orders] = await Promise.all([
+    User.find({
+      $or: [
+        { email: searchRegex },
+        { name: searchRegex },
+        { phone: searchRegex },
+      ],
+    }).select('_id').limit(100).lean().exec(),
+    Order.find({
+      $or: [
+        { orderNumber: searchRegex },
+        { 'shippingAddress.fullName': searchRegex },
+        { 'shippingAddress.phone': searchRegex },
+        ...(objectIdSearch ? [{ _id: search }] : []),
+      ],
+    }).select('_id').limit(100).lean().exec(),
+  ]);
+  const conditions = [
+    { failureReason: searchRegex },
+    { providerPaymentId: searchRegex },
+    { providerRefundId: searchRegex },
+    { reason: searchRegex },
+  ];
+  const userIds = users.map((user) => user._id);
+  const orderIds = orders.map((order) => order._id);
+
+  if (objectIdSearch) {
+    conditions.push({ _id: search });
+    conditions.push({ orderId: search });
+    conditions.push({ paymentId: search });
+    conditions.push({ userId: search });
+  }
+
+  if (userIds.length > 0) {
+    conditions.push({ userId: { $in: userIds } });
+  }
+
+  if (orderIds.length > 0) {
+    conditions.push({ orderId: { $in: orderIds } });
+  }
 
   return {
-    $or: [
-      { failureReason: searchRegex },
-      { providerPaymentId: searchRegex },
-      { providerRefundId: searchRegex },
-      { reason: searchRegex },
-    ],
+    $or: conditions,
   };
 };
 
@@ -440,7 +480,7 @@ const listAdminRefunds = async (query = {}) => {
   const { limit, page, skip } = getPagination(query);
   const provider = resolveRefundProvider(query.provider);
   const status = resolveRefundStatus(query.status);
-  const searchFilter = buildRefundSearchFilter(query.search);
+  const searchFilter = await buildRefundSearchFilter(query.search);
   const filter = {};
 
   if (provider) {
