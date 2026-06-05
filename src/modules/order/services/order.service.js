@@ -25,6 +25,8 @@ import ProductVariant from '@/modules/product/models/product-variant.model.js';
 import Payment from '@/modules/payment/models/payment.model.js';
 import Refund from '@/modules/payment/models/refund.model.js';
 import { formatPayment, formatRefund } from '@/modules/payment/services/refund.service.js';
+import Shipment from '@/modules/shipping/models/shipment.model.js';
+import { formatShipment } from '@/modules/shipping/services/shipment-formatters.js';
 import Address from '@/modules/users/models/address.model.js';
 import User from '@/modules/users/models/user.model.js';
 
@@ -341,6 +343,7 @@ const formatOrder = (order, items = [], paymentDetails = {}) => ({
   providerOrderId: order.providerOrderId || '',
   providerPaymentId: order.providerPaymentId || '',
   refunds: paymentDetails.refunds || [],
+  shipments: paymentDetails.shipments || [],
   shippingAddress: formatAddressSnapshot(order.shippingAddress),
   shippingCharge: order.shippingCharge,
   status: order.status,
@@ -393,6 +396,12 @@ const getOrderPaymentDetails = async (orderId) => {
     payment: formatPayment(payment),
     refunds: refunds.map(formatRefund),
   };
+};
+
+const getOrderShippingDetails = async (orderId) => {
+  const shipments = await Shipment.find({ orderId }).sort({ createdAt: -1 }).lean().exec();
+
+  return shipments.map(formatShipment);
 };
 
 const getOrderItemsByOrderIds = async (orderIds = []) => {
@@ -686,12 +695,16 @@ const getCustomerOrder = async (actor, orderId) => {
     throw new ApiError(404, 'Order not found');
   }
 
-  const [items, paymentDetails] = await Promise.all([
+  const [items, paymentDetails, shipments] = await Promise.all([
     getOrderItems(order._id),
     getOrderPaymentDetails(order._id),
+    getOrderShippingDetails(order._id),
   ]);
 
-  return formatOrder(order, items, paymentDetails);
+  return formatOrder(order, items, {
+    ...paymentDetails,
+    shipments,
+  });
 };
 
 const listAdminOrders = async (query = {}) => {
@@ -734,12 +747,16 @@ const getAdminOrder = async (orderId) => {
     throw new ApiError(404, 'Order not found');
   }
 
-  const [items, paymentDetails] = await Promise.all([
+  const [items, paymentDetails, shipments] = await Promise.all([
     getOrderItems(order._id),
     getOrderPaymentDetails(order._id),
+    getOrderShippingDetails(order._id),
   ]);
 
-  return formatAdminOrder(order, items, paymentDetails);
+  return formatAdminOrder(order, items, {
+    ...paymentDetails,
+    shipments,
+  });
 };
 
 export {

@@ -1,7 +1,11 @@
-import '@/config/env.config.js';
+import {
+  delhiveryBaseUrl,
+  delhiveryPickupLocation,
+  delhiveryToken,
+} from '@/config/env.config.js';
 
 export default {
-  baseUrl: process.env.DELHIVERY_BASE_URL || '',
-  token: process.env.DELHIVERY_TOKEN || '',
-  pickupLocation: process.env.DELHIVERY_PICKUP_LOCATION || '',
+  baseUrl: delhiveryBaseUrl,
+  pickupLocation: delhiveryPickupLocation,
+  token: delhiveryToken,
 };

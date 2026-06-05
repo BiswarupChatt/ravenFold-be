@@ -27,11 +27,19 @@ export const cloudinaryApiKey = process.env.CLOUDINARY_API_KEY || '';
 export const cloudinaryApiSecret = process.env.CLOUDINARY_API_SECRET || '';
 export const cloudinaryUploadFolder = process.env.CLOUDINARY_UPLOAD_FOLDER || 'ravenfold/products';
 export const paymentDefaultProvider = process.env.PAYMENT_DEFAULT_PROVIDER || 'razorpay';
+export const shippingDefaultProvider = process.env.SHIPPING_DEFAULT_PROVIDER || 'manual';
+export const shiprocketEmail = process.env.SHIPROCKET_EMAIL || '';
+export const shiprocketPassword = process.env.SHIPROCKET_PASSWORD || '';
+export const shiprocketBaseUrl = process.env.SHIPROCKET_BASE_URL || 'https://apiv2.shiprocket.in/v1/external';
+export const shiprocketPickupLocation = process.env.SHIPROCKET_PICKUP_LOCATION || '';
 export const juspayApiKey = process.env.JUSPAY_API_KEY || '';
 export const juspayBaseUrl = process.env.JUSPAY_BASE_URL || 'https://api.juspay.in';
 export const juspayMerchantId = process.env.JUSPAY_MERCHANT_ID || '';
 export const juspayResponseKey = process.env.JUSPAY_RESPONSE_KEY || '';
 export const juspayWebhookSecret = process.env.JUSPAY_WEBHOOK_SECRET || '';
+export const delhiveryBaseUrl = process.env.DELHIVERY_BASE_URL || 'https://track.delhivery.com';
+export const delhiveryToken = process.env.DELHIVERY_TOKEN || '';
+export const delhiveryPickupLocation = process.env.DELHIVERY_PICKUP_LOCATION || '';
 
 export default {
   apiPrefix,
@@ -57,4 +65,12 @@ export default {
   paymentDefaultProvider,
   port,
   redisUrl,
+  delhiveryBaseUrl,
+  delhiveryPickupLocation,
+  delhiveryToken,
+  shiprocketBaseUrl,
+  shiprocketEmail,
+  shiprocketPassword,
+  shiprocketPickupLocation,
+  shippingDefaultProvider,
 };
