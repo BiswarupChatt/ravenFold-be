@@ -1,6 +1,5 @@
 import ApiError from '@/common/errors/api.error.js';
 import {
-  hasOwn,
   normalizeOptionalNumber,
   normalizeText,
 } from '@/common/utils/service.util.js';
@@ -112,13 +111,17 @@ const getSingleItemShipmentPackage = (items = []) => {
   return null;
 };
 
-const mergePackageValues = (basePackage, manualPackage, payload = {}) => ({
+const coalescePackageValue = (manualValue, baseValue) => (
+  manualValue === null || manualValue === undefined ? baseValue ?? null : manualValue
+);
+
+const mergePackageValues = (basePackage, manualPackage) => ({
   boxType: manualPackage.boxType || basePackage?.boxType || SHIPPING_CUSTOM_BOX_TYPE,
   boxTypeName: basePackage?.boxTypeName || '',
-  breadth: hasOwn(payload, 'breadth') ? manualPackage.breadth : basePackage?.breadth ?? null,
-  height: hasOwn(payload, 'height') ? manualPackage.height : basePackage?.height ?? null,
-  length: hasOwn(payload, 'length') ? manualPackage.length : basePackage?.length ?? null,
-  weight: hasOwn(payload, 'weight') ? manualPackage.weight : basePackage?.weight ?? null,
+  breadth: coalescePackageValue(manualPackage.breadth, basePackage?.breadth),
+  height: coalescePackageValue(manualPackage.height, basePackage?.height),
+  length: coalescePackageValue(manualPackage.length, basePackage?.length),
+  weight: coalescePackageValue(manualPackage.weight, basePackage?.weight),
 });
 
 const normalizePackageBoxType = (value, field = 'boxType', { allowEmpty = false } = {}) => {
@@ -148,7 +151,7 @@ const resolveShipmentPackage = ({ boxType = null, items = [], payload = {} } = {
   const manualPackage = normalizeShipmentPackageInput(payload);
   const boxPackage = getPackageFromBoxType(boxType);
   const productPackage = manualPackage.boxType ? null : getSingleItemShipmentPackage(items);
-  const resolvedPackage = mergePackageValues(boxPackage || productPackage, manualPackage, payload);
+  const resolvedPackage = mergePackageValues(boxPackage || productPackage, manualPackage);
 
   if (!hasCompleteDimensions(resolvedPackage)) {
     throw new ApiError(

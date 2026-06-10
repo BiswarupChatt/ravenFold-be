@@ -305,21 +305,51 @@ const formatAddressSnapshot = (address = {}) => ({
   state: address.state || '',
 });
 
-const formatOrderItem = (item) => ({
-  id: item.id || item._id?.toString(),
-  lineTotal: item.lineTotal,
-  orderId: getDocumentId(item.orderId),
-  priceAtTime: item.priceAtTime,
-  priceSnapshot: item.priceSnapshot,
-  productId: getDocumentId(item.productId),
-  productSnapshot: item.productSnapshot,
-  quantity: item.quantity,
-  variantId: getDocumentId(item.variantId),
-  createdAt: item.createdAt,
-  updatedAt: item.updatedAt,
-});
+const formatProductShipping = (product = null) => {
+  const shipping = product && typeof product === 'object' ? product.shipping : null;
 
-const formatOrder = (order, items = [], paymentDetails = {}) => ({
+  if (!shipping) {
+    return null;
+  }
+
+  return {
+    dimensions: {
+      height: shipping.dimensions?.height ?? null,
+      length: shipping.dimensions?.length ?? null,
+      unit: shipping.dimensions?.unit || 'cm',
+      width: shipping.dimensions?.width ?? null,
+    },
+    requiresShipping: shipping.requiresShipping !== false,
+    weight: {
+      unit: shipping.weight?.unit || 'kg',
+      value: shipping.weight?.value ?? null,
+    },
+  };
+};
+
+const formatOrderItem = (item, { includeProductShipping = false } = {}) => {
+  const formattedItem = {
+    id: item.id || item._id?.toString(),
+    lineTotal: item.lineTotal,
+    orderId: getDocumentId(item.orderId),
+    priceAtTime: item.priceAtTime,
+    priceSnapshot: item.priceSnapshot,
+    productId: getDocumentId(item.productId),
+    productSnapshot: item.productSnapshot,
+    quantity: item.quantity,
+    variantId: getDocumentId(item.variantId),
+    createdAt: item.createdAt,
+    updatedAt: item.updatedAt,
+  };
+
+  if (includeProductShipping) {
+    formattedItem.productShipping = formatProductShipping(item.productId);
+  }
+
+  return formattedItem;
+};
+
+const formatOrder = (order, items = [], paymentDetails = {}, options = {}) => ({
   id: order.id || order._id?.toString(),
   bagDiscount: order.bagDiscount,
   billingAddress: formatAddressSnapshot(order.billingAddress),
@@ -330,7 +360,7 @@ const formatOrder = (order, items = [], paymentDetails = {}) => ({
   createdAt: order.createdAt,
   currency: order.currency || DEFAULT_CURRENCY,
   itemCount: order.itemCount,
-  items: items.map(formatOrderItem),
+  items: items.map((item) => formatOrderItem(item, options)),
   notes: order.notes || '',
   orderNumber: order.orderNumber,
   paidAt: order.paidAt,
@@ -371,13 +401,19 @@ const formatUserSummary = (user) => {
   };
 };
 
-const formatAdminOrder = (order, items = [], paymentDetails = {}) => ({
-  ...formatOrder(order, items, paymentDetails),
+const formatAdminOrder = (order, items = [], paymentDetails = {}, options = {}) => ({
+  ...formatOrder(order, items, paymentDetails, options),
   user: formatUserSummary(order.userId),
 });
 
-const getOrderItems = async (orderId) => {
-  return OrderItem.find({ orderId }).sort({ createdAt: 1 }).lean().exec();
+const getOrderItems = async (orderId, { includeProductShipping = false } = {}) => {
+  const query = OrderItem.find({ orderId }).sort({ createdAt: 1 });
+
+  if (includeProductShipping) {
+    query.populate({ path: 'productId', select: 'shipping' });
+  }
+
+  return query.lean().exec();
 };
 
 const getOrderPaymentDetails = async (orderId) => {
@@ -748,7 +784,7 @@ const getAdminOrder = async (orderId) => {
   }
 
   const [items, paymentDetails, shipments] = await Promise.all([
-    getOrderItems(order._id),
+    getOrderItems(order._id, { includeProductShipping: true }),
     getOrderPaymentDetails(order._id),
     getOrderShippingDetails(order._id),
   ]);
@@ -756,7 +792,7 @@ const getAdminOrder = async (orderId) => {
   return formatAdminOrder(order, items, {
     ...paymentDetails,
     shipments,
-  });
+  }, { includeProductShipping: true });
 };
 
 export {
