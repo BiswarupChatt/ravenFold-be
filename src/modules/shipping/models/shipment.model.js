@@ -1,9 +1,25 @@
 import mongoose from 'mongoose';
 
-import { SHIPMENT_STATUS, SHIPPING_PROVIDER } from '@/common/constants/shipping.constant.js';
+import {
+  SHIPMENT_STATUS,
+  SHIPPING_PROVIDER,
+} from '@/common/constants/shipping.constant.js';
+
+const customBoxType = 'custom';
 
 const packageSchema = new mongoose.Schema(
   {
+    boxType: {
+      type: String,
+      lowercase: true,
+      trim: true,
+      default: customBoxType,
+    },
+    boxTypeName: {
+      type: String,
+      trim: true,
+      default: '',
+    },
     breadth: {
       type: Number,
       min: 0,

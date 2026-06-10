@@ -3,16 +3,21 @@ import { sendSuccess } from '@/common/helpers/response.helper.js';
 import { ORDER_STATUS, PAYMENT_STATUS } from '@/common/constants/order.constant.js';
 import { SHIPMENT_STATUS, SHIPPING_PROVIDER } from '@/common/constants/shipping.constant.js';
 import {
+  normalizeShipmentPackageInput,
+  resolveShipmentPackage,
+  SHIPPING_CUSTOM_BOX_TYPE,
+} from '@/common/utils/shipping-package.util.js';
+import {
   assertDatabaseReady,
   getDocumentId,
   hasOwn,
   normalizeObjectId,
-  normalizeOptionalNumber,
   normalizeText,
 } from '@/common/utils/service.util.js';
 import OrderItem from '@/modules/order/models/order-item.model.js';
 import OrderStatusHistory from '@/modules/order/models/order-status-history.model.js';
 import Order from '@/modules/order/models/order.model.js';
+import boxTypeService from '@/modules/box-type/services/box-type.service.js';
 import ShipmentEvent from '@/modules/shipping/models/shipment-event.model.js';
 import Shipment from '@/modules/shipping/models/shipment.model.js';
 import { getShippingProvider, listShippingProviders } from '@/modules/shipping/providers/shipping-provider.registry.js';
@@ -68,13 +73,6 @@ const normalizeOptionalDate = (value, field) => {
   return date;
 };
 
-const normalizePackage = (payload = {}) => ({
-  breadth: normalizeOptionalNumber(payload.breadth, 'breadth'),
-  height: normalizeOptionalNumber(payload.height, 'height'),
-  length: normalizeOptionalNumber(payload.length, 'length'),
-  weight: normalizeOptionalNumber(payload.weight, 'weight'),
-});
-
 const normalizePickupAddress = (payload = {}) => ({
   addressLine1: normalizeText(payload.addressLine1),
   addressLine2: normalizeText(payload.addressLine2),
@@ -122,7 +120,11 @@ const getOrderForFulfillment = async (orderId) => {
 };
 
 const getOrderItems = async (orderId) => {
-  return OrderItem.find({ orderId }).sort({ createdAt: 1 }).lean().exec();
+  return OrderItem.find({ orderId })
+    .populate({ path: 'productId', select: 'shipping' })
+    .sort({ createdAt: 1 })
+    .lean()
+    .exec();
 };
 
 const appendOrderStatusHistory = async ({ actorId, fromPaymentStatus, fromStatus, note, order }) => {
@@ -282,7 +284,7 @@ const buildShipmentPayload = ({ order, payload, providerResult }) => {
     labelUrl: providerResult.labelUrl || normalizeText(payload.labelUrl),
     notes: normalizeText(payload.notes),
     orderId: order._id,
-    package: normalizePackage(payload),
+    package: normalizeShipmentPackageInput(payload),
     pickupAddress: normalizePickupAddress(payload.pickupAddress || {}),
     pickupLocation: normalizeText(payload.pickupLocation),
     pickupScheduledAt: normalizeOptionalDate(payload.pickupScheduledAt, 'pickupScheduledAt'),
@@ -314,16 +316,29 @@ const createShipmentForOrder = async (actor, orderId, payload = {}) => {
   }
 
   const items = await getOrderItems(order._id);
+  const packageInput = normalizeShipmentPackageInput(payload);
+  const selectedBoxType = packageInput.boxType && packageInput.boxType !== SHIPPING_CUSTOM_BOX_TYPE
+    ? await boxTypeService.getActiveBoxTypeByCode(packageInput.boxType)
+    : null;
+  const resolvedPackage = resolveShipmentPackage({
+    boxType: selectedBoxType,
+    items,
+    payload,
+  });
+  const resolvedPayload = {
+    ...payload,
+    ...resolvedPackage,
+  };
   const user = order.userId && typeof order.userId === 'object' ? order.userId : null;
   const providerResult = await provider.createShipment({
     items,
     order,
-    payload,
+    payload: resolvedPayload,
     user,
   });
   const shipment = await Shipment.create(buildShipmentPayload({
     order,
-    payload,
+    payload: resolvedPayload,
     providerResult: {
       ...providerResult,
       provider: providerName,

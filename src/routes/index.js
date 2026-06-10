@@ -3,6 +3,7 @@ import express from 'express';
 import adminRoutes from '@/routes/admin.routes.js';
 import analyticsRoutes from '@/modules/analytics/routes/analytics.routes.js';
 import authRoutes from '@/modules/auth/routes/auth.routes.js';
+import boxTypeRoutes from '@/modules/box-type/routes/box-type.routes.js';
 import cartRoutes from '@/modules/cart/routes/cart.routes.js';
 import categoryRoutes from '@/modules/category/routes/category.routes.js';
 import couponRoutes from '@/modules/coupon/routes/coupon.routes.js';
@@ -34,6 +35,7 @@ router.get('/health', (req, res) => {
 });
 
 router.use('/auth', authRoutes);
+router.use('/box-types', boxTypeRoutes);
 router.use('/users', userRoutes);
 router.use('/categories', categoryRoutes);
 router.use('/products', productRoutes);

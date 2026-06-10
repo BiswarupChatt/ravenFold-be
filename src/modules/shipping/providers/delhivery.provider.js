@@ -94,10 +94,10 @@ const postDelhiveryForm = async (path, data) => {
 };
 
 const buildPackage = (payload = {}) => ({
-  breadth: Number(payload.breadth || 10),
-  height: Number(payload.height || 5),
-  length: Number(payload.length || 10),
-  weight: Number(payload.weight || 0.5),
+  breadth: Number(payload.breadth ?? 10),
+  height: Number(payload.height ?? 5),
+  length: Number(payload.length ?? 10),
+  weight: Number(payload.weight ?? 0.5),
 });
 
 const buildShipmentPayload = ({ order, payload, user }) => {

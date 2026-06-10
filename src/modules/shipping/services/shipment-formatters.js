@@ -1,6 +1,8 @@
 import { getDocumentId } from '@/common/utils/service.util.js';
 
 const formatPackage = (packageDetails = {}) => ({
+  boxType: packageDetails.boxType || 'custom',
+  boxTypeName: packageDetails.boxTypeName || '',
   breadth: packageDetails.breadth ?? null,
   height: packageDetails.height ?? null,
   length: packageDetails.length ?? null,
