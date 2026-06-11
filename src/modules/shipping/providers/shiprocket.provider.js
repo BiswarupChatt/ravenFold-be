@@ -42,14 +42,27 @@ const normalizeProviderStatus = (status = '') => {
   return SHIPMENT_STATUS.LABEL_CREATED;
 };
 
-const getAuthToken = async () => {
+const getAuthToken = async ({ logCredentials = false } = {}) => {
   assertShippingProviderConfigured(
     shiprocketConfig.baseUrl && shiprocketConfig.email && shiprocketConfig.password,
     SHIPPING_PROVIDER.SHIPROCKET,
   );
 
+  if (logCredentials) {
+    console.log('[Shiprocket Test Auth] email:', shiprocketConfig.email);
+    console.log('[Shiprocket Test Auth] password:', shiprocketConfig.password);
+  }
+
   if (tokenCache.token && tokenCache.expiresAt > Date.now()) {
+    if (logCredentials) {
+      console.log('[Shiprocket Test Auth] using cached token');
+    }
+
     return tokenCache.token;
+  }
+
+  if (logCredentials) {
+    console.log('[Shiprocket Test Auth] requesting fresh token');
   }
 
   const response = await postJson(`${shiprocketConfig.baseUrl.replace(/\/$/, '')}/auth/login`, {
@@ -195,9 +208,19 @@ const trackShipment = async ({ shipment }) => {
   };
 };
 
+const testConnection = async () => {
+  const token = await getAuthToken({ logCredentials: true });
+
+  return {
+    authenticated: Boolean(token),
+    pickupLocation: shiprocketConfig.pickupLocation || '',
+  };
+};
+
 export default {
   cancelShipment,
   createShipment,
   name: SHIPPING_PROVIDER.SHIPROCKET,
+  testConnection,
   trackShipment,
 };

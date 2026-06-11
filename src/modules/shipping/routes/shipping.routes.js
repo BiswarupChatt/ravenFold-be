@@ -16,6 +16,13 @@ router.get(
   asyncHandler(shippingController.listOrderShipments),
 );
 
+router.get(
+  '/admin/providers/:providerName/test',
+  authenticateUser,
+  adminMiddleware,
+  asyncHandler(shippingController.testShippingProviderConnection),
+);
+
 router.post(
   '/admin/orders/:orderId/pack',
   authenticateUser,

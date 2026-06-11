@@ -14,6 +14,14 @@ const listOrderShipments = async (req, res) => {
   );
 };
 
+const testShippingProviderConnection = async (req, res) => {
+  return sendSuccess(
+    res,
+    await shippingService.testShippingProviderConnection(req.params.providerName),
+    'Shipping provider connection tested',
+  );
+};
+
 const markOrderPacked = async (req, res) => {
   return sendSuccess(
     res,
@@ -98,6 +106,7 @@ export {
   listAdminPickupLocations,
   listOrderShipments,
   markOrderPacked,
+  testShippingProviderConnection,
   updatePickupLocation,
   updateShipmentStatus,
 };
@@ -112,6 +121,7 @@ export default {
   listAdminPickupLocations,
   listOrderShipments,
   markOrderPacked,
+  testShippingProviderConnection,
   updatePickupLocation,
   updateShipmentStatus,
 };

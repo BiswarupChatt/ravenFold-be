@@ -251,6 +251,36 @@ const getShipmentEventsByShipmentIds = async (shipmentIds = []) => {
   return eventsByShipmentId;
 };
 
+const testShippingProviderConnection = async (providerName = SHIPPING_PROVIDER.SHIPROCKET) => {
+  assertDatabaseReady();
+  const normalizedProviderName = normalizeShippingProvider(providerName);
+  const provider = getShippingProvider(normalizedProviderName);
+  const activePickupLocationList = await pickupLocationService.listPickupLocations({}, { includeInactive: false });
+  const connectionResult = provider.testConnection
+    ? await provider.testConnection()
+    : { authenticated: false };
+
+  return {
+    activePickupLocationCount: activePickupLocationList.pagination.total,
+    activePickupLocations: activePickupLocationList.items.map((location) => ({
+      code: location.code,
+      id: location.id,
+      name: location.name,
+      pickupLocation: location.pickupLocation,
+    })),
+    authenticated: Boolean(connectionResult.authenticated),
+    defaultPickupLocation: connectionResult.pickupLocation || '',
+    provider: normalizedProviderName,
+    readyForShipment: Boolean(
+      connectionResult.authenticated &&
+      (
+        connectionResult.pickupLocation ||
+        activePickupLocationList.items.length > 0
+      ),
+    ),
+  };
+};
+
 const getOrderShipments = async (orderId, { includeEvents = false } = {}) => {
   const shipments = await Shipment.find({ orderId })
     .sort({ createdAt: -1 })
@@ -505,6 +535,7 @@ export {
   getStatus,
   getStatusData,
   markOrderPacked,
+  testShippingProviderConnection,
   updateShipmentStatus,
 };
 
@@ -515,5 +546,6 @@ export default {
   getStatus,
   getStatusData,
   markOrderPacked,
+  testShippingProviderConnection,
   updateShipmentStatus,
 };
