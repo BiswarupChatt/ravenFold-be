@@ -30,6 +30,14 @@ const getAdminOrder = async (req, res) => {
   return sendSuccess(res, await orderService.getAdminOrder(req.params.orderId), 'Order fetched');
 };
 
+const updateAdminOrderStatus = async (req, res) => {
+  return sendSuccess(
+    res,
+    await orderService.updateAdminOrderStatus(req.user, req.params.orderId, req.body),
+    'Order status updated',
+  );
+};
+
 export {
   createCheckoutOrder,
   getAdminOrder,
@@ -37,6 +45,7 @@ export {
   getStatus,
   listCustomerOrders,
   listAdminOrders,
+  updateAdminOrderStatus,
 };
 
 export default {
@@ -46,4 +55,5 @@ export default {
   getStatus,
   listCustomerOrders,
   listAdminOrders,
+  updateAdminOrderStatus,
 };

@@ -77,6 +77,24 @@ const normalizeUserId = (actor = null) => {
   return actor.id;
 };
 
+const appendOrderStatusHistory = async ({
+  actorId = null,
+  fromPaymentStatus,
+  fromStatus,
+  note = '',
+  order,
+}) => {
+  await OrderStatusHistory.create({
+    createdBy: actorId,
+    fromPaymentStatus,
+    fromStatus,
+    note,
+    orderId: order._id,
+    toPaymentStatus: order.paymentStatus,
+    toStatus: order.status,
+  });
+};
+
 const formatVariantLabel = (variant) => {
   if (!variant?.optionValues?.length) {
     return '';
@@ -795,6 +813,44 @@ const getAdminOrder = async (orderId) => {
   }, { includeProductShipping: true });
 };
 
+const updateAdminOrderStatus = async (actor, orderId, payload = {}) => {
+  assertDatabaseReady();
+  const actorId = normalizeUserId(actor);
+  const normalizedOrderId = normalizeObjectId(orderId, 'order id');
+  const nextStatus = normalizeOrderStatus(payload.status);
+  const note = normalizeText(payload.note);
+  const order = await Order.findById(normalizedOrderId).exec();
+
+  if (!order) {
+    throw new ApiError(404, 'Order not found');
+  }
+
+  if (order.status !== nextStatus) {
+    const fromStatus = order.status;
+    const fromPaymentStatus = order.paymentStatus;
+
+    order.status = nextStatus;
+    order.cancelledAt = nextStatus === ORDER_STATUS.CANCELLED
+      ? (order.cancelledAt || new Date())
+      : null;
+
+    await order.save();
+    await appendOrderStatusHistory({
+      actorId,
+      fromPaymentStatus,
+      fromStatus,
+      note: note || `Order status updated to ${nextStatus} by admin`,
+      order,
+    });
+  }
+
+  return {
+    orderId: order._id.toString(),
+    paymentStatus: order.paymentStatus,
+    status: order.status,
+  };
+};
+
 export {
   createCheckoutOrder,
   getAdminOrder,
@@ -803,6 +859,7 @@ export {
   getStatusData,
   listCustomerOrders,
   listAdminOrders,
+  updateAdminOrderStatus,
 };
 
 export default {
@@ -813,4 +870,5 @@ export default {
   getStatusData,
   listCustomerOrders,
   listAdminOrders,
+  updateAdminOrderStatus,
 };

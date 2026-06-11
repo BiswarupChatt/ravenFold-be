@@ -23,6 +23,13 @@ router.get(
   asyncHandler(orderController.getAdminOrder),
 );
 
+router.patch(
+  '/admin/:orderId/status',
+  authenticateUser,
+  adminMiddleware,
+  asyncHandler(orderController.updateAdminOrderStatus),
+);
+
 router.get('/me', authenticateUser, asyncHandler(orderController.listCustomerOrders));
 router.get('/me/:orderId', authenticateUser, asyncHandler(orderController.getCustomerOrder));
 router.post('/checkout', authenticateUser, asyncHandler(orderController.createCheckoutOrder));
