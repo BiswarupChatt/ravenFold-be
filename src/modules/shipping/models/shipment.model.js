@@ -121,6 +121,12 @@ const shipmentSchema = new mongoose.Schema(
       trim: true,
       default: '',
     },
+    pickupLocationId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'PickupLocation',
+      default: null,
+      index: true,
+    },
     labelUrl: {
       type: String,
       trim: true,

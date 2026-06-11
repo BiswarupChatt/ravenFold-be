@@ -34,6 +34,7 @@ const formatShipment = (shipment = {}) => ({
   orderId: getDocumentId(shipment.orderId),
   package: formatPackage(shipment.package),
   pickupAddress: formatPickupAddress(shipment.pickupAddress),
+  pickupLocationId: getDocumentId(shipment.pickupLocationId),
   pickupLocation: shipment.pickupLocation || '',
   pickupScheduledAt: shipment.pickupScheduledAt,
   provider: shipment.provider || '',

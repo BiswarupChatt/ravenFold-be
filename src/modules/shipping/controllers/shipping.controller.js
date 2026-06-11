@@ -1,4 +1,5 @@
 import { sendSuccess } from '@/common/helpers/response.helper.js';
+import pickupLocationService from '@/modules/shipping/services/pickup-location.service.js';
 import shippingService from '@/modules/shipping/services/shipping.service.js';
 
 const getStatus = async (req, res) => {
@@ -30,6 +31,47 @@ const createShipmentForOrder = async (req, res) => {
   );
 };
 
+const createPickupLocation = async (req, res) => {
+  return sendSuccess(
+    res,
+    await pickupLocationService.createPickupLocation(req.body),
+    'Pickup location created',
+    201,
+  );
+};
+
+const listAdminPickupLocations = async (req, res) => {
+  return sendSuccess(
+    res,
+    await pickupLocationService.listPickupLocations(req.query, { includeInactive: true }),
+    'Pickup locations fetched',
+  );
+};
+
+const getAdminPickupLocation = async (req, res) => {
+  return sendSuccess(
+    res,
+    await pickupLocationService.getPickupLocation(req.params.pickupLocationIdOrCode, { includeInactive: true }),
+    'Pickup location fetched',
+  );
+};
+
+const updatePickupLocation = async (req, res) => {
+  return sendSuccess(
+    res,
+    await pickupLocationService.updatePickupLocation(req.params.pickupLocationId, req.body),
+    'Pickup location updated',
+  );
+};
+
+const deletePickupLocation = async (req, res) => {
+  return sendSuccess(
+    res,
+    await pickupLocationService.deletePickupLocation(req.params.pickupLocationId),
+    'Pickup location deleted',
+  );
+};
+
 const updateShipmentStatus = async (req, res) => {
   return sendSuccess(
     res,
@@ -48,18 +90,28 @@ const cancelShipment = async (req, res) => {
 
 export {
   cancelShipment,
+  createPickupLocation,
   createShipmentForOrder,
+  deletePickupLocation,
+  getAdminPickupLocation,
   getStatus,
+  listAdminPickupLocations,
   listOrderShipments,
   markOrderPacked,
+  updatePickupLocation,
   updateShipmentStatus,
 };
 
 export default {
   cancelShipment,
+  createPickupLocation,
   createShipmentForOrder,
+  deletePickupLocation,
+  getAdminPickupLocation,
   getStatus,
+  listAdminPickupLocations,
   listOrderShipments,
   markOrderPacked,
+  updatePickupLocation,
   updateShipmentStatus,
 };

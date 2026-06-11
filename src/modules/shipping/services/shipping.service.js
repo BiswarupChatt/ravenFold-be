@@ -12,6 +12,7 @@ import {
   getDocumentId,
   hasOwn,
   normalizeObjectId,
+  normalizeOptionalObjectId,
   normalizeText,
 } from '@/common/utils/service.util.js';
 import OrderItem from '@/modules/order/models/order-item.model.js';
@@ -20,6 +21,7 @@ import Order from '@/modules/order/models/order.model.js';
 import boxTypeService from '@/modules/box-type/services/box-type.service.js';
 import ShipmentEvent from '@/modules/shipping/models/shipment-event.model.js';
 import Shipment from '@/modules/shipping/models/shipment.model.js';
+import pickupLocationService from '@/modules/shipping/services/pickup-location.service.js';
 import { getShippingProvider, listShippingProviders } from '@/modules/shipping/providers/shipping-provider.registry.js';
 import { formatShipment, formatShipmentEvent } from '@/modules/shipping/services/shipment-formatters.js';
 
@@ -82,6 +84,27 @@ const normalizePickupAddress = (payload = {}) => ({
   phone: normalizeText(payload.phone),
   pincode: normalizeText(payload.pincode),
   state: normalizeText(payload.state),
+});
+
+const getShipmentPickupLocation = async (payload = {}) => {
+  const pickupLocationId = normalizeText(payload.pickupLocationId);
+
+  if (!pickupLocationId) {
+    return null;
+  }
+
+  return pickupLocationService.getActivePickupLocation(pickupLocationId);
+};
+
+const buildPickupAddressFromPickupLocation = (location = {}) => normalizePickupAddress({
+  addressLine1: location.addressLine1,
+  addressLine2: location.addressLine2,
+  city: location.city,
+  country: location.country,
+  name: location.name,
+  phone: location.phone,
+  pincode: location.pincode,
+  state: location.state,
 });
 
 const terminalOrderStatuses = new Set([
@@ -286,6 +309,7 @@ const buildShipmentPayload = ({ order, payload, providerResult }) => {
     orderId: order._id,
     package: normalizeShipmentPackageInput(payload),
     pickupAddress: normalizePickupAddress(payload.pickupAddress || {}),
+    pickupLocationId: normalizeOptionalObjectId(payload.pickupLocationId, 'pickup location id'),
     pickupLocation: normalizeText(payload.pickupLocation),
     pickupScheduledAt: normalizeOptionalDate(payload.pickupScheduledAt, 'pickupScheduledAt'),
     provider: providerResult.provider || normalizeShippingProvider(payload.provider),
@@ -317,6 +341,7 @@ const createShipmentForOrder = async (actor, orderId, payload = {}) => {
 
   const items = await getOrderItems(order._id);
   const packageInput = normalizeShipmentPackageInput(payload);
+  const pickupLocation = await getShipmentPickupLocation(payload);
   const selectedBoxType = packageInput.boxType && packageInput.boxType !== SHIPPING_CUSTOM_BOX_TYPE
     ? await boxTypeService.getActiveBoxTypeByCode(packageInput.boxType)
     : null;
@@ -328,6 +353,13 @@ const createShipmentForOrder = async (actor, orderId, payload = {}) => {
   const resolvedPayload = {
     ...payload,
     ...resolvedPackage,
+    ...(pickupLocation
+      ? {
+          pickupLocationId: pickupLocation.id,
+          pickupAddress: buildPickupAddressFromPickupLocation(pickupLocation),
+          pickupLocation: pickupLocation.pickupLocation || pickupLocation.name,
+        }
+      : {}),
   };
   const user = order.userId && typeof order.userId === 'object' ? order.userId : null;
   const providerResult = await provider.createShipment({

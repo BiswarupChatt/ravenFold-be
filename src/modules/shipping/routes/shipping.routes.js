@@ -30,6 +30,23 @@ router.post(
   asyncHandler(shippingController.createShipmentForOrder),
 );
 
+router.get(
+  '/admin/pickup-locations/:pickupLocationIdOrCode',
+  authenticateUser,
+  adminMiddleware,
+  asyncHandler(shippingController.getAdminPickupLocation),
+);
+
+router
+  .route('/admin/pickup-locations')
+  .get(authenticateUser, adminMiddleware, asyncHandler(shippingController.listAdminPickupLocations))
+  .post(authenticateUser, adminMiddleware, asyncHandler(shippingController.createPickupLocation));
+
+router
+  .route('/admin/pickup-locations/:pickupLocationId')
+  .patch(authenticateUser, adminMiddleware, asyncHandler(shippingController.updatePickupLocation))
+  .delete(authenticateUser, adminMiddleware, asyncHandler(shippingController.deletePickupLocation));
+
 router.patch(
   '/admin/shipments/:shipmentId/status',
   authenticateUser,
