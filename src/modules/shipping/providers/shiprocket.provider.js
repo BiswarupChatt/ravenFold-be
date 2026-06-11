@@ -48,23 +48,6 @@ const getAuthToken = async ({ logCredentials = false } = {}) => {
     SHIPPING_PROVIDER.SHIPROCKET,
   );
 
-  if (logCredentials) {
-    console.log('[Shiprocket Test Auth] email:', shiprocketConfig.email);
-    console.log('[Shiprocket Test Auth] password:', shiprocketConfig.password);
-  }
-
-  if (tokenCache.token && tokenCache.expiresAt > Date.now()) {
-    if (logCredentials) {
-      console.log('[Shiprocket Test Auth] using cached token');
-    }
-
-    return tokenCache.token;
-  }
-
-  if (logCredentials) {
-    console.log('[Shiprocket Test Auth] requesting fresh token');
-  }
-
   const response = await postJson(`${shiprocketConfig.baseUrl.replace(/\/$/, '')}/auth/login`, {
     email: shiprocketConfig.email,
     password: shiprocketConfig.password,
