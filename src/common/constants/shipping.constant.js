@@ -14,6 +14,7 @@ const SHIPMENT_STATUS = Object.freeze({
   OUT_FOR_DELIVERY: 'out_for_delivery',
   PICKED_UP: 'picked_up',
   PICKUP_SCHEDULED: 'pickup_scheduled',
+  PROVIDER_ORDER_CREATED: 'provider_order_created',
   RTO: 'rto',
 });
 

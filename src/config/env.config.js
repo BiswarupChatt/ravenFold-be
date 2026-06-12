@@ -32,6 +32,7 @@ export const shiprocketEmail = process.env.SHIPROCKET_EMAIL || '';
 export const shiprocketPassword = process.env.SHIPROCKET_PASSWORD || '';
 export const shiprocketBaseUrl = process.env.SHIPROCKET_BASE_URL || 'https://apiv2.shiprocket.in/v1/external';
 export const shiprocketPickupLocation = process.env.SHIPROCKET_PICKUP_LOCATION || '';
+export const shiprocketWebhookSecret = process.env.SHIPROCKET_WEBHOOK_SECRET || '';
 export const juspayApiKey = process.env.JUSPAY_API_KEY || '';
 export const juspayBaseUrl = process.env.JUSPAY_BASE_URL || 'https://api.juspay.in';
 export const juspayMerchantId = process.env.JUSPAY_MERCHANT_ID || '';
@@ -72,5 +73,6 @@ export default {
   shiprocketEmail,
   shiprocketPassword,
   shiprocketPickupLocation,
+  shiprocketWebhookSecret,
   shippingDefaultProvider,
 };

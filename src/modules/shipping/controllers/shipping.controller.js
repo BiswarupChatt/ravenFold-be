@@ -55,6 +55,15 @@ const createShipmentForOrder = async (req, res) => {
   );
 };
 
+const createProviderOrderForOrder = async (req, res) => {
+  return sendSuccess(
+    res,
+    await shippingService.createProviderOrderForOrder(req.user, req.params.orderId, req.body),
+    'Provider order created',
+    201,
+  );
+};
+
 const createPickupLocation = async (req, res) => {
   return sendSuccess(
     res,
@@ -104,6 +113,54 @@ const updateShipmentStatus = async (req, res) => {
   );
 };
 
+const assignAwbToShipment = async (req, res) => {
+  return sendSuccess(
+    res,
+    await shippingService.assignAwbToShipment(req.user, req.params.shipmentId, req.body),
+    'AWB assigned',
+  );
+};
+
+const schedulePickupForShipment = async (req, res) => {
+  return sendSuccess(
+    res,
+    await shippingService.schedulePickupForShipment(req.user, req.params.shipmentId, req.body),
+    'Pickup scheduled',
+  );
+};
+
+const generateShipmentLabel = async (req, res) => {
+  return sendSuccess(
+    res,
+    await shippingService.generateShipmentLabel(req.user, req.params.shipmentId, req.body),
+    'Shipment label generated',
+  );
+};
+
+const generateShipmentManifest = async (req, res) => {
+  return sendSuccess(
+    res,
+    await shippingService.generateShipmentManifest(req.user, req.params.shipmentId, req.body),
+    'Shipment manifest generated',
+  );
+};
+
+const syncShipmentTracking = async (req, res) => {
+  return sendSuccess(
+    res,
+    await shippingService.syncShipmentTracking(req.user, req.params.shipmentId, req.body),
+    'Shipment tracking synced',
+  );
+};
+
+const handleShiprocketWebhook = async (req, res) => {
+  return sendSuccess(
+    res,
+    await shippingService.handleShiprocketWebhook(req),
+    'Shiprocket webhook received',
+  );
+};
+
 const cancelShipment = async (req, res) => {
   return sendSuccess(
     res,
@@ -113,34 +170,48 @@ const cancelShipment = async (req, res) => {
 };
 
 export {
+  assignAwbToShipment,
   cancelShipment,
   createPickupLocation,
+  createProviderOrderForOrder,
   createShipmentForOrder,
   deletePickupLocation,
   getAdminPickupLocation,
   getCourierOptionsForOrder,
   getProviderPickupLocations,
   getStatus,
+  generateShipmentLabel,
+  generateShipmentManifest,
+  handleShiprocketWebhook,
   listAdminPickupLocations,
   listOrderShipments,
   markOrderPacked,
+  schedulePickupForShipment,
+  syncShipmentTracking,
   testShippingProviderConnection,
   updatePickupLocation,
   updateShipmentStatus,
 };
 
 export default {
+  assignAwbToShipment,
   cancelShipment,
   createPickupLocation,
+  createProviderOrderForOrder,
   createShipmentForOrder,
   deletePickupLocation,
   getAdminPickupLocation,
   getCourierOptionsForOrder,
   getProviderPickupLocations,
   getStatus,
+  generateShipmentLabel,
+  generateShipmentManifest,
+  handleShiprocketWebhook,
   listAdminPickupLocations,
   listOrderShipments,
   markOrderPacked,
+  schedulePickupForShipment,
+  syncShipmentTracking,
   testShippingProviderConnection,
   updatePickupLocation,
   updateShipmentStatus,

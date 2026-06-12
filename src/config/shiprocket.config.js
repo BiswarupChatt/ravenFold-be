@@ -3,6 +3,7 @@ import {
   shiprocketEmail,
   shiprocketPassword,
   shiprocketPickupLocation,
+  shiprocketWebhookSecret,
 } from '@/config/env.config.js';
 
 export default {
@@ -10,4 +11,5 @@ export default {
   email: shiprocketEmail,
   password: shiprocketPassword,
   pickupLocation: shiprocketPickupLocation,
+  webhookSecret: shiprocketWebhookSecret,
 };

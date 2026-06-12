@@ -22,15 +22,19 @@ const formatPickupAddress = (address = {}) => ({
 
 const formatShipment = (shipment = {}) => ({
   awbCode: shipment.awbCode || '',
+  awbAssignedAt: shipment.awbAssignedAt,
   cancelledAt: shipment.cancelledAt,
+  courierCharge: shipment.courierCharge ?? null,
   courierCompanyId: shipment.courierCompanyId || '',
   courierName: shipment.courierName || '',
   createdAt: shipment.createdAt,
   deliveredAt: shipment.deliveredAt,
+  estimatedDeliveryDays: shipment.estimatedDeliveryDays || '',
   id: shipment.id || shipment._id?.toString(),
   invoiceUrl: shipment.invoiceUrl || '',
   labelUrl: shipment.labelUrl || '',
   lastSyncedAt: shipment.lastSyncedAt,
+  manifestUrl: shipment.manifestUrl || '',
   notes: shipment.notes || '',
   orderId: getDocumentId(shipment.orderId),
   package: formatPackage(shipment.package),
@@ -38,8 +42,10 @@ const formatShipment = (shipment = {}) => ({
   pickupLocationId: getDocumentId(shipment.pickupLocationId),
   pickupLocation: shipment.pickupLocation || '',
   pickupScheduledAt: shipment.pickupScheduledAt,
+  pickupTokenNumber: shipment.pickupTokenNumber || '',
   provider: shipment.provider || '',
   providerOrderId: shipment.providerOrderId || '',
+  providerOrderCreatedAt: shipment.providerOrderCreatedAt,
   providerShipmentId: shipment.providerShipmentId || '',
   providerStatus: shipment.providerStatus || '',
   shippedAt: shipment.shippedAt,
@@ -47,6 +53,7 @@ const formatShipment = (shipment = {}) => ({
   trackingUrl: shipment.trackingUrl || '',
   updatedAt: shipment.updatedAt,
   userId: getDocumentId(shipment.userId),
+  events: Array.isArray(shipment.events) ? shipment.events.map(formatShipmentEvent) : [],
 });
 
 const formatShipmentEvent = (event = {}) => ({

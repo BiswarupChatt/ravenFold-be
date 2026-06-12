@@ -253,6 +253,157 @@ const getTrackingUrl = (...responses) => {
   return '';
 };
 
+const buildShipmentIdArray = (shipmentId, response = null) => {
+  const normalizedShipmentId = normalizeShiprocketRequestId(shipmentId);
+
+  if (!normalizedShipmentId) {
+    throw new ApiError(
+      502,
+      getShiprocketErrorMessage(response) || 'Shiprocket did not return a shipment id',
+      {
+        providerResponse: response,
+        shipmentId,
+      },
+    );
+  }
+
+  return [normalizedShipmentId];
+};
+
+const buildShiprocketTrackingUrl = (trackingKey = '') => {
+  if (!trackingKey) {
+    return '';
+  }
+
+  return `${shiprocketConfig.baseUrl.replace(/\/$/, '')}/courier/track/awb/${encodeURIComponent(trackingKey)}`;
+};
+
+const parseShiprocketDateValue = (value) => {
+  if (!hasMeaningfulValue(value)) {
+    return null;
+  }
+
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return value;
+  }
+
+  const normalizedValue = String(value).trim();
+  const directDate = new Date(normalizedValue);
+
+  if (!Number.isNaN(directDate.getTime())) {
+    return directDate;
+  }
+
+  let match = normalizedValue.match(/^(\d{2}) (\d{2}) (\d{4}) (\d{2}):(\d{2}):(\d{2})$/);
+
+  if (match) {
+    const [, day, month, year, hour, minute, second] = match;
+
+    return new Date(Date.UTC(
+      Number(year),
+      Number(month) - 1,
+      Number(day),
+      Number(hour),
+      Number(minute),
+      Number(second),
+    ));
+  }
+
+  match = normalizedValue.match(/^(\d{4})-(\d{2})-(\d{2})(?: (\d{2}):(\d{2}):(\d{2}))?$/);
+
+  if (match) {
+    const [, year, month, day, hour = '00', minute = '00', second = '00'] = match;
+
+    return new Date(Date.UTC(
+      Number(year),
+      Number(month) - 1,
+      Number(day),
+      Number(hour),
+      Number(minute),
+      Number(second),
+    ));
+  }
+
+  match = normalizedValue.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+
+  if (match) {
+    const [, day, month, year] = match;
+
+    return new Date(Date.UTC(Number(year), Number(month) - 1, Number(day)));
+  }
+
+  return null;
+};
+
+const getShiprocketTrackingScans = (response = {}) => {
+  const data = getShiprocketResponseData(response);
+  const scans = data?.tracking_data?.shipment_track_activities ||
+    data?.tracking_data?.shipment_track?.[0]?.scans ||
+    data?.tracking_data?.scans ||
+    data?.scans ||
+    response.tracking_data?.shipment_track_activities ||
+    response.tracking_data?.shipment_track?.[0]?.scans ||
+    response.scans;
+
+  return Array.isArray(scans) ? scans : [];
+};
+
+const buildShiprocketEventId = (scan = {}, fallbackStatus = '') => (
+  [
+    scan['sr-status-label'] || scan.current_status || fallbackStatus || '',
+    scan.status || '',
+    scan.activity || '',
+    scan.location || '',
+    scan.date || scan.current_timestamp || '',
+  ].join('|')
+);
+
+const formatShiprocketTrackingEvent = (scan = {}, fallbackStatus = '') => {
+  const providerStatus = scan['sr-status-label'] ||
+    scan.current_status ||
+    fallbackStatus ||
+    '';
+  const status = normalizeProviderStatus(`${providerStatus} ${scan.activity || ''}`);
+
+  return {
+    eventAt: parseShiprocketDateValue(scan.date || scan.current_timestamp || scan.timestamp),
+    location: scan.location || '',
+    message: scan.activity || providerStatus || '',
+    providerEventId: buildShiprocketEventId(scan, fallbackStatus),
+    providerStatus,
+    rawEvent: scan,
+    status,
+  };
+};
+
+const extractShiprocketTrackingSnapshot = (response = {}) => {
+  const data = getShiprocketResponseData(response);
+  const providerStatus = data?.tracking_data?.shipment_track?.[0]?.current_status ||
+    data?.current_status ||
+    data?.shipment_status ||
+    response.tracking_data?.shipment_track?.[0]?.current_status ||
+    response.current_status ||
+    response.shipment_status ||
+    '';
+  const scans = getShiprocketTrackingScans(response);
+  const events = scans
+    .map((scan) => formatShiprocketTrackingEvent(scan, providerStatus))
+    .filter((event) => event.status && event.message);
+  const awbCode = getShiprocketValue(response, ['awb', 'awb_code', 'awbCode']);
+  const trackingKey = awbCode || getProviderShipmentId(response);
+
+  return {
+    awbCode,
+    courierName: getCourierName(response),
+    events,
+    pickupScheduledAt: getShiprocketValue(response, ['pickup_scheduled_date']) || '',
+    providerStatus: providerStatus || (events[0]?.providerStatus || ''),
+    rawProviderResponse: response,
+    status: normalizeProviderStatus(providerStatus || events[0]?.providerStatus || ''),
+    trackingUrl: getTrackingUrl(response) || buildShiprocketTrackingUrl(trackingKey),
+  };
+};
+
 const getShiprocketErrorMessage = (...responses) => {
   for (const response of responses) {
     const message = buildProviderErrorMessage(getShiprocketResponseData(response));
@@ -535,14 +686,29 @@ const assignAwb = async ({ courierCompanyId, providerResponse = null, shipmentId
 };
 
 const createShipment = async ({ items, order, payload = {}, user }) => {
+  const providerOrderResult = await createProviderOrder({ items, order, payload, user });
+  const awbResult = await assignAwbToShipment({
+    payload,
+    shipment: {
+      providerShipmentId: providerOrderResult.providerShipmentId,
+      rawProviderResponse: providerOrderResult.rawProviderResponse,
+    },
+  });
+
+  return {
+    ...providerOrderResult,
+    ...awbResult,
+    rawProviderResponse: {
+      assignAwb: awbResult.rawProviderResponse,
+      createOrder: providerOrderResult.rawProviderResponse,
+    },
+  };
+};
+
+const createProviderOrder = async ({ items, order, payload = {}, user }) => {
   const createPayload = buildCreatePayload({ items, order, payload, user });
-  const courierCompanyId = payload.courierCompanyId || payload.courier_id || payload.courierId || '';
 
   assertShippingProviderConfigured(createPayload.pickup_location, SHIPPING_PROVIDER.SHIPROCKET);
-
-  if (!courierCompanyId) {
-    throw new ApiError(400, 'Select a Shiprocket courier before creating AWB');
-  }
 
   const providerResponse = await postJson(
     buildShiprocketUrl('/orders/create/adhoc'),
@@ -552,44 +718,167 @@ const createShipment = async ({ items, order, payload = {}, user }) => {
     },
   );
   const providerShipmentId = getProviderShipmentId(providerResponse);
+  const providerStatus = providerResponse.status ||
+    providerResponse.shipment_status ||
+    'order_created';
+
+  return {
+    awbCode: '',
+    courierCompanyId: '',
+    courierName: '',
+    invoiceUrl: getShiprocketResponseData(providerResponse).invoice_url || '',
+    labelUrl: getShiprocketResponseData(providerResponse).label_url || '',
+    providerOrderId: getProviderOrderId(providerResponse) || order.orderNumber,
+    providerShipmentId,
+    providerStatus: providerStatus || 'order_created',
+    rawProviderResponse: providerResponse,
+    status: SHIPMENT_STATUS.PROVIDER_ORDER_CREATED,
+    trackingUrl: getTrackingUrl(providerResponse),
+  };
+};
+
+const assignAwbToShipment = async ({ payload = {}, shipment }) => {
+  const courierCompanyId = payload.courierCompanyId || payload.courier_id || payload.courierId || '';
+
+  if (!courierCompanyId) {
+    throw new ApiError(400, 'Select a Shiprocket courier before creating AWB');
+  }
+
   const awbResponse = await assignAwb({
     courierCompanyId,
-    providerResponse,
-    shipmentId: providerShipmentId,
+    providerResponse: shipment?.rawProviderResponse || null,
+    shipmentId: shipment?.providerShipmentId,
   });
   const providerStatus = awbResponse.status ||
     awbResponse.shipment_status ||
-    providerResponse.status ||
-    providerResponse.shipment_status ||
-    '';
-  const awbCode = getAwbCode(awbResponse, providerResponse);
+    shipment?.providerStatus ||
+    'awb_assigned';
+  const awbCode = getAwbCode(awbResponse, shipment?.rawProviderResponse);
 
   if (!awbCode) {
     throw new ApiError(
       502,
-      getShiprocketErrorMessage(awbResponse, providerResponse) || 'Shiprocket did not return an AWB for the selected courier',
+      getShiprocketErrorMessage(awbResponse, shipment?.rawProviderResponse) ||
+        'Shiprocket did not return an AWB for the selected courier',
       {
         awbResponse,
-        providerResponse,
+        providerResponse: shipment?.rawProviderResponse || null,
       },
     );
   }
 
   return {
     awbCode,
+    courierCharge: payload.courierCharge ?? payload.charge ?? null,
     courierCompanyId: courierCompanyId.toString(),
-    courierName: getCourierName(awbResponse, providerResponse) || payload.courierName || '',
-    invoiceUrl: getShiprocketResponseData(awbResponse).invoice_url || getShiprocketResponseData(providerResponse).invoice_url || '',
-    labelUrl: getShiprocketResponseData(awbResponse).label_url || getShiprocketResponseData(providerResponse).label_url || '',
-    providerOrderId: getProviderOrderId(providerResponse) || order.orderNumber,
-    providerShipmentId,
+    courierName: getCourierName(awbResponse, shipment?.rawProviderResponse) || payload.courierName || '',
+    estimatedDeliveryDays: payload.estimatedDeliveryDays || '',
+    invoiceUrl: getShiprocketResponseData(awbResponse).invoice_url || '',
+    labelUrl: getShiprocketResponseData(awbResponse).label_url || '',
     providerStatus: providerStatus || 'awb_assigned',
-    rawProviderResponse: {
-      assignAwb: awbResponse,
-      createOrder: providerResponse,
+    rawProviderResponse: awbResponse,
+    status: normalizeProviderStatus(providerStatus || 'awb_assigned'),
+    trackingUrl: getTrackingUrl(awbResponse, shipment?.rawProviderResponse),
+  };
+};
+
+const schedulePickupForShipment = async ({ payload = {}, shipment }) => {
+  const shipmentId = normalizeShiprocketRequestId(shipment?.providerShipmentId);
+
+  if (!shipmentId) {
+    throw new ApiError(400, 'Shiprocket shipment id is required before scheduling pickup');
+  }
+
+  const requestBody = {
+    shipment_id: shipmentId,
+  };
+
+  if (payload.status) {
+    requestBody.status = payload.status;
+  }
+
+  const providerResponse = await postJson(
+    buildShiprocketUrl('/courier/generate/pickup'),
+    requestBody,
+    {
+      headers: await getAuthHeaders(),
     },
-    status: normalizeProviderStatus(providerStatus || 'shipped'),
-    trackingUrl: getTrackingUrl(awbResponse, providerResponse),
+  );
+
+  const providerStatus = providerResponse.status ||
+    providerResponse.shipment_status ||
+    (providerResponse.pickup_generated ? 'pickup_scheduled' : 'pickup_pending');
+
+  return {
+    labelUrl: getShiprocketResponseData(providerResponse).label_url || shipment?.labelUrl || '',
+    manifestUrl: getShiprocketResponseData(providerResponse).manifest_url || '',
+    pickupScheduledAt: getShiprocketValue(providerResponse, ['pickup_scheduled_date']) || '',
+    pickupTokenNumber: getShiprocketValue(providerResponse, ['pickup_token_number']) || '',
+    providerStatus,
+    rawProviderResponse: providerResponse,
+    status: normalizeProviderStatus(providerStatus || 'pickup_scheduled'),
+  };
+};
+
+const generateLabelForShipment = async ({ shipment }) => {
+  const providerResponse = await postJson(
+    buildShiprocketUrl('/courier/generate/label'),
+    {
+      shipment_id: buildShipmentIdArray(shipment?.providerShipmentId, shipment?.rawProviderResponse),
+    },
+    {
+      headers: await getAuthHeaders(),
+    },
+  );
+  const labelUrl = getShiprocketResponseData(providerResponse).label_url || '';
+
+  if (!labelUrl) {
+    throw new ApiError(
+      502,
+      getShiprocketErrorMessage(providerResponse) || 'Shiprocket did not return a label URL',
+      {
+        providerResponse,
+        shipmentId: shipment?.providerShipmentId || '',
+      },
+    );
+  }
+
+  return {
+    labelUrl,
+    providerStatus: shipment?.providerStatus || 'label_created',
+    rawProviderResponse: providerResponse,
+    status: SHIPMENT_STATUS.LABEL_CREATED,
+  };
+};
+
+const generateManifestForShipment = async ({ shipment }) => {
+  const providerResponse = await postJson(
+    buildShiprocketUrl('/manifests/generate'),
+    {
+      shipment_id: buildShipmentIdArray(shipment?.providerShipmentId, shipment?.rawProviderResponse),
+    },
+    {
+      headers: await getAuthHeaders(),
+    },
+  );
+  const manifestUrl = getShiprocketResponseData(providerResponse).manifest_url || '';
+
+  if (!manifestUrl) {
+    throw new ApiError(
+      502,
+      getShiprocketErrorMessage(providerResponse) || 'Shiprocket did not return a manifest URL',
+      {
+        providerResponse,
+        shipmentId: shipment?.providerShipmentId || '',
+      },
+    );
+  }
+
+  return {
+    manifestUrl,
+    providerStatus: shipment?.providerStatus || 'manifest_generated',
+    rawProviderResponse: providerResponse,
+    status: shipment?.status || SHIPMENT_STATUS.PICKUP_SCHEDULED,
   };
 };
 
@@ -623,20 +912,13 @@ const trackShipment = async ({ shipment }) => {
   }
 
   const providerResponse = await getJson(
-    `${shiprocketConfig.baseUrl.replace(/\/$/, '')}/courier/track/awb/${encodeURIComponent(trackingKey)}`,
+    buildShiprocketTrackingUrl(trackingKey),
     {
       headers: await getAuthHeaders(),
     },
   );
-  const providerStatus = providerResponse.tracking_data?.shipment_track?.[0]?.current_status ||
-    providerResponse.current_status ||
-    '';
 
-  return {
-    providerStatus,
-    rawProviderResponse: providerResponse,
-    status: normalizeProviderStatus(providerStatus),
-  };
+  return extractShiprocketTrackingSnapshot(providerResponse);
 };
 
 const testConnection = async () => {
@@ -649,11 +931,17 @@ const testConnection = async () => {
 };
 
 export default {
+  assignAwbToShipment,
   cancelShipment,
+  createProviderOrder,
   createShipment,
+  extractTrackingSnapshot: extractShiprocketTrackingSnapshot,
+  generateLabelForShipment,
+  generateManifestForShipment,
   getCourierOptions,
   listPickupLocations,
   name: SHIPPING_PROVIDER.SHIPROCKET,
+  schedulePickupForShipment,
   testConnection,
   trackShipment,
 };

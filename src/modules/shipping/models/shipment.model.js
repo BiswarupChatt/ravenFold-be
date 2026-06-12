@@ -102,9 +102,18 @@ const shipmentSchema = new mongoose.Schema(
       default: '',
       index: true,
     },
+    awbAssignedAt: {
+      type: Date,
+      default: null,
+    },
     cancelledAt: {
       type: Date,
       default: null,
+    },
+    courierCharge: {
+      type: Number,
+      default: null,
+      min: 0,
     },
     courierName: {
       type: String,
@@ -121,6 +130,11 @@ const shipmentSchema = new mongoose.Schema(
     deliveredAt: {
       type: Date,
       default: null,
+    },
+    estimatedDeliveryDays: {
+      type: String,
+      trim: true,
+      default: '',
     },
     invoiceUrl: {
       type: String,
@@ -141,6 +155,11 @@ const shipmentSchema = new mongoose.Schema(
     lastSyncedAt: {
       type: Date,
       default: null,
+    },
+    manifestUrl: {
+      type: String,
+      trim: true,
+      default: '',
     },
     notes: {
       type: String,
@@ -170,6 +189,11 @@ const shipmentSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+    pickupTokenNumber: {
+      type: String,
+      trim: true,
+      default: '',
+    },
     provider: {
       type: String,
       enum: Object.values(SHIPPING_PROVIDER),
@@ -181,6 +205,10 @@ const shipmentSchema = new mongoose.Schema(
       trim: true,
       default: '',
       index: true,
+    },
+    providerOrderCreatedAt: {
+      type: Date,
+      default: null,
     },
     providerShipmentId: {
       type: String,

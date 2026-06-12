@@ -26,7 +26,8 @@ import Payment from '@/modules/payment/models/payment.model.js';
 import Refund from '@/modules/payment/models/refund.model.js';
 import { formatPayment, formatRefund } from '@/modules/payment/services/refund.service.js';
 import Shipment from '@/modules/shipping/models/shipment.model.js';
-import { formatShipment } from '@/modules/shipping/services/shipment-formatters.js';
+import ShipmentEvent from '@/modules/shipping/models/shipment-event.model.js';
+import { formatShipment, formatShipmentEvent } from '@/modules/shipping/services/shipment-formatters.js';
 import Address from '@/modules/users/models/address.model.js';
 import User from '@/modules/users/models/user.model.js';
 
@@ -455,7 +456,29 @@ const getOrderPaymentDetails = async (orderId) => {
 const getOrderShippingDetails = async (orderId) => {
   const shipments = await Shipment.find({ orderId }).sort({ createdAt: -1 }).lean().exec();
 
-  return shipments.map(formatShipment);
+  if (!shipments.length) {
+    return [];
+  }
+
+  const shipmentIds = shipments.map((shipment) => shipment._id);
+  const events = await ShipmentEvent.find({ shipmentId: { $in: shipmentIds } })
+    .sort({ eventAt: -1, createdAt: -1 })
+    .lean()
+    .exec();
+  const eventsByShipmentId = new Map();
+
+  for (const event of events) {
+    const shipmentId = getDocumentId(event.shipmentId);
+    const shipmentEvents = eventsByShipmentId.get(shipmentId) || [];
+
+    shipmentEvents.push(formatShipmentEvent(event));
+    eventsByShipmentId.set(shipmentId, shipmentEvents);
+  }
+
+  return shipments.map((shipment) => formatShipment({
+    ...shipment,
+    events: eventsByShipmentId.get(getDocumentId(shipment._id)) || [],
+  }));
 };
 
 const getOrderItemsByOrderIds = async (orderIds = []) => {
