@@ -112,6 +112,12 @@ const shipmentSchema = new mongoose.Schema(
       default: '',
       index: true,
     },
+    courierCompanyId: {
+      type: String,
+      trim: true,
+      default: '',
+      index: true,
+    },
     deliveredAt: {
       type: Date,
       default: null,

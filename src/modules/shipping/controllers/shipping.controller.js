@@ -22,6 +22,14 @@ const testShippingProviderConnection = async (req, res) => {
   );
 };
 
+const getCourierOptionsForOrder = async (req, res) => {
+  return sendSuccess(
+    res,
+    await shippingService.getCourierOptionsForOrder(req.user, req.params.orderId, req.query),
+    'Courier options fetched',
+  );
+};
+
 const markOrderPacked = async (req, res) => {
   return sendSuccess(
     res,
@@ -102,6 +110,7 @@ export {
   createShipmentForOrder,
   deletePickupLocation,
   getAdminPickupLocation,
+  getCourierOptionsForOrder,
   getStatus,
   listAdminPickupLocations,
   listOrderShipments,
@@ -117,6 +126,7 @@ export default {
   createShipmentForOrder,
   deletePickupLocation,
   getAdminPickupLocation,
+  getCourierOptionsForOrder,
   getStatus,
   listAdminPickupLocations,
   listOrderShipments,

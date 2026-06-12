@@ -76,12 +76,14 @@ const getJson = async (url, { headers = {} } = {}) => {
 
 export {
   assertShippingProviderConfigured,
+  buildProviderErrorMessage,
   getJson,
   postJson,
 };
 
 export default {
   assertShippingProviderConfigured,
+  buildProviderErrorMessage,
   getJson,
   postJson,
 };

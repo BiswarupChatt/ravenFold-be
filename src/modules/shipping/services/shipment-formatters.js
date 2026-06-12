@@ -23,6 +23,7 @@ const formatPickupAddress = (address = {}) => ({
 const formatShipment = (shipment = {}) => ({
   awbCode: shipment.awbCode || '',
   cancelledAt: shipment.cancelledAt,
+  courierCompanyId: shipment.courierCompanyId || '',
   courierName: shipment.courierName || '',
   createdAt: shipment.createdAt,
   deliveredAt: shipment.deliveredAt,

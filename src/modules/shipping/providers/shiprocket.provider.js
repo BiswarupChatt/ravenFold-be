@@ -1,7 +1,12 @@
 import ApiError from '@/common/errors/api.error.js';
 import { SHIPMENT_STATUS, SHIPPING_PROVIDER } from '@/common/constants/shipping.constant.js';
 import shiprocketConfig from '@/config/shiprocket.config.js';
-import { assertShippingProviderConfigured, getJson, postJson } from '@/modules/shipping/providers/provider.util.js';
+import {
+  assertShippingProviderConfigured,
+  buildProviderErrorMessage,
+  getJson,
+  postJson,
+} from '@/modules/shipping/providers/provider.util.js';
 
 let tokenCache = {
   expiresAt: 0,
@@ -42,11 +47,15 @@ const normalizeProviderStatus = (status = '') => {
   return SHIPMENT_STATUS.LABEL_CREATED;
 };
 
-const getAuthToken = async ({ logCredentials = false } = {}) => {
+const getAuthToken = async () => {
   assertShippingProviderConfigured(
     shiprocketConfig.baseUrl && shiprocketConfig.email && shiprocketConfig.password,
     SHIPPING_PROVIDER.SHIPROCKET,
   );
+
+  if (tokenCache.token && tokenCache.expiresAt > Date.now()) {
+    return tokenCache.token;
+  }
 
   const response = await postJson(`${shiprocketConfig.baseUrl.replace(/\/$/, '')}/auth/login`, {
     email: shiprocketConfig.email,
@@ -69,12 +78,170 @@ const getAuthHeaders = async () => ({
   Authorization: `Bearer ${await getAuthToken()}`,
 });
 
+const buildShiprocketUrl = (path) => `${shiprocketConfig.baseUrl.replace(/\/$/, '')}${path}`;
+
 const buildPackage = (payload = {}) => ({
   breadth: Number(payload.breadth ?? 10),
   height: Number(payload.height ?? 5),
   length: Number(payload.length ?? 10),
   weight: Number(payload.weight ?? 0.5),
 });
+
+const getShiprocketResponseData = (response = {}) => (
+  response.data ||
+  response.response?.data ||
+  response.response ||
+  response
+);
+
+const hasMeaningfulValue = (value) => {
+  if (value === null || value === undefined) {
+    return false;
+  }
+
+  if (typeof value === 'string') {
+    return value.trim() !== '';
+  }
+
+  return true;
+};
+
+const findNestedValueByKeys = (value, keys = [], visited = new Set()) => {
+  if (!hasMeaningfulValue(value)) {
+    return '';
+  }
+
+  if (typeof value !== 'object') {
+    return value;
+  }
+
+  if (visited.has(value)) {
+    return '';
+  }
+
+  visited.add(value);
+
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const nestedMatch = findNestedValueByKeys(item, keys, visited);
+
+      if (hasMeaningfulValue(nestedMatch)) {
+        return nestedMatch;
+      }
+    }
+
+    return '';
+  }
+
+  for (const key of keys) {
+    if (!Object.prototype.hasOwnProperty.call(value, key)) {
+      continue;
+    }
+
+    const directMatch = findNestedValueByKeys(value[key], keys, visited);
+
+    if (hasMeaningfulValue(directMatch)) {
+      return directMatch;
+    }
+  }
+
+  for (const nestedValue of Object.values(value)) {
+    const nestedMatch = findNestedValueByKeys(nestedValue, keys, visited);
+
+    if (hasMeaningfulValue(nestedMatch)) {
+      return nestedMatch;
+    }
+  }
+
+  return '';
+};
+
+const getShiprocketValue = (response = {}, keys = []) => {
+  const dataMatch = findNestedValueByKeys(getShiprocketResponseData(response), keys);
+
+  if (hasMeaningfulValue(dataMatch)) {
+    return dataMatch.toString();
+  }
+
+  const responseMatch = findNestedValueByKeys(response, keys);
+
+  if (hasMeaningfulValue(responseMatch)) {
+    return responseMatch.toString();
+  }
+
+  return '';
+};
+
+const getProviderOrderId = (response = {}) => {
+  const providerOrderId = getShiprocketValue(response, ['order_id', 'orderId']);
+
+  if (providerOrderId) {
+    return providerOrderId;
+  }
+
+  const data = getShiprocketResponseData(response);
+  const fallbackOrderId = data?.id || response.id || '';
+
+  return hasMeaningfulValue(fallbackOrderId) ? fallbackOrderId.toString() : '';
+};
+
+const getProviderShipmentId = (response = {}) => {
+  return getShiprocketValue(response, ['shipment_id', 'shipmentId']);
+};
+
+const getAwbCode = (...responses) => {
+  for (const response of responses) {
+    const awbCode = getShiprocketValue(response, ['awb_code', 'awbCode']);
+
+    if (awbCode) {
+      return awbCode;
+    }
+  }
+
+  return '';
+};
+
+const getCourierName = (...responses) => {
+  for (const response of responses) {
+    const courierName = getShiprocketValue(response, ['courier_name', 'courierName']);
+
+    if (courierName) {
+      return courierName;
+    }
+  }
+
+  return '';
+};
+
+const getTrackingUrl = (...responses) => {
+  for (const response of responses) {
+    const trackingUrl = getShiprocketValue(response, ['tracking_url', 'trackingUrl']);
+
+    if (trackingUrl) {
+      return trackingUrl;
+    }
+  }
+
+  return '';
+};
+
+const getShiprocketErrorMessage = (...responses) => {
+  for (const response of responses) {
+    const message = buildProviderErrorMessage(getShiprocketResponseData(response));
+
+    if (message && message !== 'Shipping provider request failed') {
+      return message;
+    }
+
+    const responseMessage = buildProviderErrorMessage(response);
+
+    if (responseMessage && responseMessage !== 'Shipping provider request failed') {
+      return responseMessage;
+    }
+  }
+
+  return '';
+};
 
 const buildOrderItems = (items = []) => items.map((item) => ({
   discount: 0,
@@ -116,32 +283,147 @@ const buildCreatePayload = ({ items, order, payload, user }) => {
   };
 };
 
+const buildCourierOptionsQuery = ({ order, payload }) => {
+  const address = order.shippingAddress || {};
+  const packageDetails = buildPackage(payload);
+  const pickupPincode = payload.pickupAddress?.pincode || payload.pickupPincode || '';
+  const query = new URLSearchParams({
+    breadth: String(packageDetails.breadth),
+    cod: order.paymentMethod === 'cod' ? '1' : '0',
+    declared_value: String(Number(order.totalPayable || order.subtotal || 0)),
+    delivery_postcode: address.pincode || '',
+    height: String(packageDetails.height),
+    length: String(packageDetails.length),
+    pickup_postcode: pickupPincode,
+    weight: String(packageDetails.weight),
+  });
+
+  return query;
+};
+
+const formatCourierOption = (courier = {}) => {
+  const courierCompanyId = courier.courier_company_id || courier.courierCompanyId || courier.id || courier.courier_id;
+  const courierName = courier.courier_name || courier.courierName || courier.name || '';
+
+  if (!courierCompanyId || !courierName) {
+    return null;
+  }
+
+  return {
+    blocked: Boolean(courier.blocked),
+    charge: courier.rate ?? courier.freight_charge ?? courier.shipping_charge ?? null,
+    courierCompanyId: courierCompanyId.toString(),
+    courierName,
+    estimatedDeliveryDays: courier.etd || courier.estimated_delivery_days || '',
+    rating: courier.rating ?? null,
+    rawProviderResponse: courier,
+  };
+};
+
+const getCourierOptions = async ({ order, payload = {} }) => {
+  const pickupPincode = payload.pickupAddress?.pincode || payload.pickupPincode || '';
+
+  assertShippingProviderConfigured(pickupPincode, SHIPPING_PROVIDER.SHIPROCKET);
+
+  const query = buildCourierOptionsQuery({ order, payload });
+  const providerResponse = await getJson(
+    buildShiprocketUrl(`/courier/serviceability/?${query.toString()}`),
+    {
+      headers: await getAuthHeaders(),
+    },
+  );
+  const options = providerResponse.data?.available_courier_companies ||
+    providerResponse.available_courier_companies ||
+    providerResponse.courier_companies ||
+    [];
+
+  return {
+    couriers: options.map(formatCourierOption).filter(Boolean),
+    rawProviderResponse: providerResponse,
+  };
+};
+
+const assignAwb = async ({ courierCompanyId, providerResponse = null, shipmentId }) => {
+  if (!shipmentId) {
+    throw new ApiError(
+      502,
+      getShiprocketErrorMessage(providerResponse) || 'Shiprocket did not return a shipment id for AWB assignment',
+      {
+      providerResponse,
+      },
+    );
+  }
+
+  const awbProviderResponse = await postJson(
+    buildShiprocketUrl('/courier/assign/awb'),
+    {
+      courier_id: courierCompanyId,
+      shipment_id: shipmentId,
+    },
+    {
+      headers: await getAuthHeaders(),
+    },
+  );
+
+  return awbProviderResponse;
+};
+
 const createShipment = async ({ items, order, payload = {}, user }) => {
   const createPayload = buildCreatePayload({ items, order, payload, user });
+  const courierCompanyId = payload.courierCompanyId || payload.courier_id || payload.courierId || '';
 
   assertShippingProviderConfigured(createPayload.pickup_location, SHIPPING_PROVIDER.SHIPROCKET);
 
+  if (!courierCompanyId) {
+    throw new ApiError(400, 'Select a Shiprocket courier before creating AWB');
+  }
+
   const providerResponse = await postJson(
-    `${shiprocketConfig.baseUrl.replace(/\/$/, '')}/orders/create/adhoc`,
+    buildShiprocketUrl('/orders/create/adhoc'),
     createPayload,
     {
       headers: await getAuthHeaders(),
     },
   );
-  const providerStatus = providerResponse.status || providerResponse.shipment_status || '';
-  const awbCode = providerResponse.awb_code || providerResponse.awbCode || '';
+  const providerShipmentId = getProviderShipmentId(providerResponse);
+  const awbResponse = await assignAwb({
+    courierCompanyId,
+    providerResponse,
+    shipmentId: providerShipmentId,
+  });
+  const providerStatus = awbResponse.status ||
+    awbResponse.shipment_status ||
+    providerResponse.status ||
+    providerResponse.shipment_status ||
+    '';
+  const awbCode = getAwbCode(awbResponse, providerResponse);
+
+  if (!awbCode) {
+    throw new ApiError(
+      502,
+      getShiprocketErrorMessage(awbResponse, providerResponse) || 'Shiprocket did not return an AWB for the selected courier',
+      {
+        awbResponse,
+        providerResponse,
+      },
+    );
+  }
 
   return {
     awbCode,
-    courierName: providerResponse.courier_name || providerResponse.courierName || '',
-    invoiceUrl: providerResponse.invoice_url || '',
-    labelUrl: providerResponse.label_url || '',
-    providerOrderId: providerResponse.order_id?.toString() || providerResponse.id?.toString() || order.orderNumber,
-    providerShipmentId: providerResponse.shipment_id?.toString() || '',
-    providerStatus: providerStatus || (awbCode ? 'shipment_created' : 'order_created'),
-    rawProviderResponse: providerResponse,
-    status: normalizeProviderStatus(providerStatus || (awbCode ? 'shipped' : 'label_created')),
-    trackingUrl: providerResponse.tracking_url || '',
+    courierCompanyId: courierCompanyId.toString(),
+    courierName: getCourierName(awbResponse, providerResponse) || payload.courierName || '',
+    invoiceUrl: getShiprocketResponseData(awbResponse).invoice_url || getShiprocketResponseData(providerResponse).invoice_url || '',
+    labelUrl: getShiprocketResponseData(awbResponse).label_url || getShiprocketResponseData(providerResponse).label_url || '',
+    providerOrderId: getProviderOrderId(providerResponse) || order.orderNumber,
+    providerShipmentId,
+    providerStatus: providerStatus || 'awb_assigned',
+    rawProviderResponse: {
+      assignAwb: awbResponse,
+      createOrder: providerResponse,
+    },
+    status: normalizeProviderStatus(providerStatus || 'shipped'),
+    trackingUrl: getTrackingUrl(awbResponse, providerResponse),
   };
 };
 
@@ -192,7 +474,7 @@ const trackShipment = async ({ shipment }) => {
 };
 
 const testConnection = async () => {
-  const token = await getAuthToken({ logCredentials: true });
+  const token = await getAuthToken();
 
   return {
     authenticated: Boolean(token),
@@ -203,6 +485,7 @@ const testConnection = async () => {
 export default {
   cancelShipment,
   createShipment,
+  getCourierOptions,
   name: SHIPPING_PROVIDER.SHIPROCKET,
   testConnection,
   trackShipment,

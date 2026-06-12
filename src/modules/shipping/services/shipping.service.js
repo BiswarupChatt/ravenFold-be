@@ -329,6 +329,7 @@ const buildShipmentPayload = ({ order, payload, providerResult }) => {
 
   return {
     awbCode: providerResult.awbCode || normalizeText(payload.awbCode),
+    courierCompanyId: providerResult.courierCompanyId || normalizeText(payload.courierCompanyId),
     courierName: providerResult.courierName || normalizeText(payload.courierName),
     deliveredAt: shipmentStatus === SHIPMENT_STATUS.DELIVERED
       ? normalizeOptionalDate(payload.deliveredAt, 'deliveredAt') || now
@@ -356,19 +357,7 @@ const buildShipmentPayload = ({ order, payload, providerResult }) => {
   };
 };
 
-const createShipmentForOrder = async (actor, orderId, payload = {}) => {
-  assertDatabaseReady();
-  const actorId = normalizeActorId(actor);
-  const providerName = normalizeShippingProvider(payload.provider);
-  const provider = getShippingProvider(providerName);
-  const order = await getOrderForFulfillment(orderId);
-
-  assertOrderCanBeFulfilled(order);
-
-  if (![ORDER_STATUS.CONFIRMED, ORDER_STATUS.PACKED, ORDER_STATUS.SHIPPED].includes(order.status)) {
-    throw new ApiError(400, `Order cannot be shipped from status: ${order.status}`);
-  }
-
+const resolveShipmentContext = async ({ order, payload = {} }) => {
   const items = await getOrderItems(order._id);
   const packageInput = normalizeShipmentPackageInput(payload);
   const pickupLocation = await getShipmentPickupLocation(payload);
@@ -392,6 +381,71 @@ const createShipmentForOrder = async (actor, orderId, payload = {}) => {
       : {}),
   };
   const user = order.userId && typeof order.userId === 'object' ? order.userId : null;
+
+  return {
+    items,
+    resolvedPayload,
+    user,
+  };
+};
+
+const getCourierOptionsForOrder = async (actor, orderId, payload = {}) => {
+  assertDatabaseReady();
+  normalizeActorId(actor);
+
+  const providerName = normalizeShippingProvider(payload.provider);
+  const provider = getShippingProvider(providerName);
+  const order = await getOrderForFulfillment(orderId);
+
+  assertOrderCanBeFulfilled(order);
+
+  if (![ORDER_STATUS.CONFIRMED, ORDER_STATUS.PACKED, ORDER_STATUS.SHIPPED].includes(order.status)) {
+    throw new ApiError(400, `Courier options cannot be fetched from status: ${order.status}`);
+  }
+
+  if (!provider.getCourierOptions) {
+    return {
+      couriers: [],
+      provider: providerName,
+    };
+  }
+
+  const {
+    items,
+    resolvedPayload,
+    user,
+  } = await resolveShipmentContext({ order, payload });
+  const providerResult = await provider.getCourierOptions({
+    items,
+    order,
+    payload: resolvedPayload,
+    user,
+  });
+
+  return {
+    couriers: providerResult.couriers || [],
+    provider: providerName,
+  };
+};
+
+const createShipmentForOrder = async (actor, orderId, payload = {}) => {
+  assertDatabaseReady();
+  const actorId = normalizeActorId(actor);
+  const providerName = normalizeShippingProvider(payload.provider);
+  const provider = getShippingProvider(providerName);
+  const order = await getOrderForFulfillment(orderId);
+
+  assertOrderCanBeFulfilled(order);
+
+  if (![ORDER_STATUS.CONFIRMED, ORDER_STATUS.PACKED, ORDER_STATUS.SHIPPED].includes(order.status)) {
+    throw new ApiError(400, `Order cannot be shipped from status: ${order.status}`);
+  }
+
+  const {
+    items,
+    resolvedPayload,
+    user,
+  } = await resolveShipmentContext({ order, payload });
   const providerResult = await provider.createShipment({
     items,
     order,
@@ -531,6 +585,7 @@ const getStatus = async (req, res) => {
 export {
   cancelShipment,
   createShipmentForOrder,
+  getCourierOptionsForOrder,
   getOrderShipments,
   getStatus,
   getStatusData,
@@ -542,6 +597,7 @@ export {
 export default {
   cancelShipment,
   createShipmentForOrder,
+  getCourierOptionsForOrder,
   getOrderShipments,
   getStatus,
   getStatusData,

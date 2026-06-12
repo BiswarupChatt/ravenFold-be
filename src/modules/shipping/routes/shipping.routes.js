@@ -23,6 +23,13 @@ router.get(
   asyncHandler(shippingController.testShippingProviderConnection),
 );
 
+router.get(
+  '/admin/orders/:orderId/courier-options',
+  authenticateUser,
+  adminMiddleware,
+  asyncHandler(shippingController.getCourierOptionsForOrder),
+);
+
 router.post(
   '/admin/orders/:orderId/pack',
   authenticateUser,
