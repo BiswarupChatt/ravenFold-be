@@ -281,6 +281,28 @@ const testShippingProviderConnection = async (providerName = SHIPPING_PROVIDER.S
   };
 };
 
+const getProviderPickupLocations = async (actor, providerName = SHIPPING_PROVIDER.SHIPROCKET) => {
+  assertDatabaseReady();
+  normalizeActorId(actor);
+
+  const normalizedProviderName = normalizeShippingProvider(providerName);
+  const provider = getShippingProvider(normalizedProviderName);
+
+  if (!provider.listPickupLocations) {
+    return {
+      items: [],
+      provider: normalizedProviderName,
+    };
+  }
+
+  const providerResult = await provider.listPickupLocations();
+
+  return {
+    items: Array.isArray(providerResult.items) ? providerResult.items : [],
+    provider: normalizedProviderName,
+  };
+};
+
 const getOrderShipments = async (orderId, { includeEvents = false } = {}) => {
   const shipments = await Shipment.find({ orderId })
     .sort({ createdAt: -1 })
@@ -585,6 +607,7 @@ const getStatus = async (req, res) => {
 export {
   cancelShipment,
   createShipmentForOrder,
+  getProviderPickupLocations,
   getCourierOptionsForOrder,
   getOrderShipments,
   getStatus,
@@ -597,6 +620,7 @@ export {
 export default {
   cancelShipment,
   createShipmentForOrder,
+  getProviderPickupLocations,
   getCourierOptionsForOrder,
   getOrderShipments,
   getStatus,

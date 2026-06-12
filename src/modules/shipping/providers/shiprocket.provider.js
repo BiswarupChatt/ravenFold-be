@@ -106,6 +106,10 @@ const hasMeaningfulValue = (value) => {
   return true;
 };
 
+const sleep = (ms) => new Promise((resolve) => {
+  setTimeout(resolve, ms);
+});
+
 const findNestedValueByKeys = (value, keys = [], visited = new Set()) => {
   if (!hasMeaningfulValue(value)) {
     return '';
@@ -156,20 +160,44 @@ const findNestedValueByKeys = (value, keys = [], visited = new Set()) => {
   return '';
 };
 
-const getShiprocketValue = (response = {}, keys = []) => {
+const getShiprocketRawValue = (response = {}, keys = []) => {
   const dataMatch = findNestedValueByKeys(getShiprocketResponseData(response), keys);
 
   if (hasMeaningfulValue(dataMatch)) {
-    return dataMatch.toString();
+    return dataMatch;
   }
 
   const responseMatch = findNestedValueByKeys(response, keys);
 
   if (hasMeaningfulValue(responseMatch)) {
-    return responseMatch.toString();
+    return responseMatch;
   }
 
-  return '';
+  return null;
+};
+
+const getShiprocketValue = (response = {}, keys = []) => {
+  const rawValue = getShiprocketRawValue(response, keys);
+
+  return hasMeaningfulValue(rawValue) ? rawValue.toString() : '';
+};
+
+const normalizeShiprocketRequestId = (value) => {
+  if (!hasMeaningfulValue(value)) {
+    return '';
+  }
+
+  if (typeof value === 'number') {
+    return value;
+  }
+
+  const normalizedValue = String(value).trim();
+
+  if (/^\d+$/.test(normalizedValue)) {
+    return Number(normalizedValue);
+  }
+
+  return normalizedValue;
 };
 
 const getProviderOrderId = (response = {}) => {
@@ -242,6 +270,79 @@ const getShiprocketErrorMessage = (...responses) => {
 
   return '';
 };
+
+const formatShiprocketPickupLocation = (location = {}) => ({
+  addressLine1: location.address || location.address_2 || '',
+  addressLine2: location.address_2 || '',
+  city: location.city || '',
+  country: location.country || 'India',
+  email: location.email || '',
+  id: hasMeaningfulValue(location.id) ? location.id.toString() : '',
+  isActive: String(location.status || '') !== '0',
+  name: location.seller_name || location.pickup_location || '',
+  phone: location.phone || '',
+  pickupLocation: location.pickup_location || location.seller_name || '',
+  pincode: location.pin_code || location.pincode || '',
+  state: location.state || '',
+  warehouseCode: location.warehouse_code || '',
+});
+
+const looksLikeShiprocketPickupLocation = (value = {}) => (
+  value &&
+  typeof value === 'object' &&
+  (
+    hasMeaningfulValue(value.pickup_location) ||
+    hasMeaningfulValue(value.seller_name)
+  ) &&
+  (
+    hasMeaningfulValue(value.pin_code) ||
+    hasMeaningfulValue(value.pincode) ||
+    hasMeaningfulValue(value.city)
+  )
+);
+
+const findShiprocketPickupLocationCollection = (value, visited = new Set()) => {
+  if (!value || typeof value !== 'object') {
+    return [];
+  }
+
+  if (visited.has(value)) {
+    return [];
+  }
+
+  visited.add(value);
+
+  if (Array.isArray(value)) {
+    if (value.some(looksLikeShiprocketPickupLocation)) {
+      return value;
+    }
+
+    for (const item of value) {
+      const nestedCollection = findShiprocketPickupLocationCollection(item, visited);
+
+      if (nestedCollection.length > 0) {
+        return nestedCollection;
+      }
+    }
+
+    return [];
+  }
+
+  for (const nestedValue of Object.values(value)) {
+    const nestedCollection = findShiprocketPickupLocationCollection(nestedValue, visited);
+
+    if (nestedCollection.length > 0) {
+      return nestedCollection;
+    }
+  }
+
+  return [];
+};
+
+const shouldRetryShipmentLookup = (error) => (
+  error?.statusCode === 404 &&
+  String(error?.message || '').toLowerCase().includes('shipment not found')
+);
 
 const buildOrderItems = (items = []) => items.map((item) => ({
   discount: 0,
@@ -343,6 +444,30 @@ const getCourierOptions = async ({ order, payload = {} }) => {
   };
 };
 
+const listPickupLocations = async () => {
+  const providerResponse = await getJson(
+    buildShiprocketUrl('/settings/company/pickup'),
+    {
+      headers: await getAuthHeaders(),
+    },
+  );
+  const pickupLocations = providerResponse.data?.data ||
+    providerResponse.data?.pickup_locations ||
+    providerResponse.pickup_locations ||
+    providerResponse.data?.shipping_address ||
+    providerResponse.shipping_address ||
+    providerResponse.data?.addresses ||
+    providerResponse.addresses ||
+    findShiprocketPickupLocationCollection(providerResponse);
+
+  return {
+    items: Array.isArray(pickupLocations)
+      ? pickupLocations.map(formatShiprocketPickupLocation).filter((location) => location.id && location.pickupLocation)
+      : [],
+    rawProviderResponse: providerResponse,
+  };
+};
+
 const assignAwb = async ({ courierCompanyId, providerResponse = null, shipmentId }) => {
   if (!shipmentId) {
     throw new ApiError(
@@ -354,18 +479,59 @@ const assignAwb = async ({ courierCompanyId, providerResponse = null, shipmentId
     );
   }
 
-  const awbProviderResponse = await postJson(
-    buildShiprocketUrl('/courier/assign/awb'),
-    {
-      courier_id: courierCompanyId,
-      shipment_id: shipmentId,
-    },
-    {
-      headers: await getAuthHeaders(),
-    },
-  );
+  const normalizedCourierId = normalizeShiprocketRequestId(courierCompanyId);
+  const normalizedShipmentId = normalizeShiprocketRequestId(shipmentId);
+  const requestBody = {
+    courier_id: normalizedCourierId,
+    shipment_id: normalizedShipmentId,
+  };
+  const retryDelaysMs = [0, 800, 1500];
+  let lastError = null;
 
-  return awbProviderResponse;
+  for (let attempt = 0; attempt < retryDelaysMs.length; attempt += 1) {
+    const retryDelayMs = retryDelaysMs[attempt];
+
+    if (retryDelayMs > 0) {
+      await sleep(retryDelayMs);
+    }
+
+    try {
+      return await postJson(
+        buildShiprocketUrl('/courier/assign/awb'),
+        requestBody,
+        {
+          headers: await getAuthHeaders(),
+        },
+      );
+    } catch (error) {
+      lastError = error;
+
+      if (!shouldRetryShipmentLookup(error) || attempt === retryDelaysMs.length - 1) {
+        break;
+      }
+    }
+  }
+
+  if (lastError) {
+    throw new ApiError(
+      lastError.statusCode || 502,
+      lastError.message || 'Shiprocket AWB assignment failed',
+      {
+        courierCompanyId: normalizedCourierId,
+        providerResponse,
+        requestBody,
+        shipmentId: normalizedShipmentId,
+        shiprocketError: lastError.details || null,
+      },
+    );
+  }
+
+  throw new ApiError(502, 'Shiprocket AWB assignment failed', {
+    courierCompanyId: normalizedCourierId,
+    providerResponse,
+    requestBody,
+    shipmentId: normalizedShipmentId,
+  });
 };
 
 const createShipment = async ({ items, order, payload = {}, user }) => {
@@ -486,6 +652,7 @@ export default {
   cancelShipment,
   createShipment,
   getCourierOptions,
+  listPickupLocations,
   name: SHIPPING_PROVIDER.SHIPROCKET,
   testConnection,
   trackShipment,

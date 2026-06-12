@@ -24,6 +24,13 @@ router.get(
 );
 
 router.get(
+  '/admin/providers/:providerName/pickup-locations',
+  authenticateUser,
+  adminMiddleware,
+  asyncHandler(shippingController.getProviderPickupLocations),
+);
+
+router.get(
   '/admin/orders/:orderId/courier-options',
   authenticateUser,
   adminMiddleware,
