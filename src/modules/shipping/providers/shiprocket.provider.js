@@ -539,6 +539,7 @@ const buildCourierOptionsQuery = ({ order, payload }) => {
   const address = order.shippingAddress || {};
   const packageDetails = buildPackage(payload);
   const pickupPincode = payload.pickupAddress?.pincode || payload.pickupPincode || '';
+  const providerOrderId = normalizeShiprocketRequestId(payload.providerOrderId || payload.order_id || payload.orderId);
   const query = new URLSearchParams({
     breadth: String(packageDetails.breadth),
     cod: order.paymentMethod === 'cod' ? '1' : '0',
@@ -549,6 +550,10 @@ const buildCourierOptionsQuery = ({ order, payload }) => {
     pickup_postcode: pickupPincode,
     weight: String(packageDetails.weight),
   });
+
+  if (providerOrderId) {
+    query.set('order_id', providerOrderId);
+  }
 
   return query;
 };
@@ -586,6 +591,8 @@ const getCourierOptions = async ({ order, payload = {} }) => {
   );
   const options = providerResponse.data?.available_courier_companies ||
     providerResponse.available_courier_companies ||
+    providerResponse.data?.courier_data ||
+    providerResponse.courier_data ||
     providerResponse.courier_companies ||
     [];
 
@@ -685,25 +692,12 @@ const assignAwb = async ({ courierCompanyId, providerResponse = null, shipmentId
   });
 };
 
-const createShipment = async ({ items, order, payload = {}, user }) => {
-  const providerOrderResult = await createProviderOrder({ items, order, payload, user });
-  const awbResult = await assignAwbToShipment({
-    payload,
-    shipment: {
-      providerShipmentId: providerOrderResult.providerShipmentId,
-      rawProviderResponse: providerOrderResult.rawProviderResponse,
-    },
-  });
-
-  return {
-    ...providerOrderResult,
-    ...awbResult,
-    rawProviderResponse: {
-      assignAwb: awbResult.rawProviderResponse,
-      createOrder: providerOrderResult.rawProviderResponse,
-    },
-  };
-};
+const createShipment = async ({ items, order, payload = {}, user }) => createProviderOrder({
+  items,
+  order,
+  payload,
+  user,
+});
 
 const createProviderOrder = async ({ items, order, payload = {}, user }) => {
   const createPayload = buildCreatePayload({ items, order, payload, user });
@@ -717,10 +711,23 @@ const createProviderOrder = async ({ items, order, payload = {}, user }) => {
       headers: await getAuthHeaders(),
     },
   );
+  const providerOrderId = getProviderOrderId(providerResponse);
   const providerShipmentId = getProviderShipmentId(providerResponse);
   const providerStatus = providerResponse.status ||
     providerResponse.shipment_status ||
     'order_created';
+
+  if (!providerOrderId || !providerShipmentId) {
+    throw new ApiError(
+      502,
+      getShiprocketErrorMessage(providerResponse) || 'Shiprocket did not return a valid order or shipment id',
+      {
+        providerOrderId,
+        providerResponse,
+        providerShipmentId,
+      },
+    );
+  }
 
   return {
     awbCode: '',
@@ -728,7 +735,7 @@ const createProviderOrder = async ({ items, order, payload = {}, user }) => {
     courierName: '',
     invoiceUrl: getShiprocketResponseData(providerResponse).invoice_url || '',
     labelUrl: getShiprocketResponseData(providerResponse).label_url || '',
-    providerOrderId: getProviderOrderId(providerResponse) || order.orderNumber,
+    providerOrderId,
     providerShipmentId,
     providerStatus: providerStatus || 'order_created',
     rawProviderResponse: providerResponse,
@@ -790,7 +797,7 @@ const schedulePickupForShipment = async ({ payload = {}, shipment }) => {
   }
 
   const requestBody = {
-    shipment_id: shipmentId,
+    shipment_id: buildShipmentIdArray(shipmentId, shipment?.rawProviderResponse),
   };
 
   if (payload.status) {

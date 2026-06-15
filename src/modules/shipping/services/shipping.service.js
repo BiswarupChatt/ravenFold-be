@@ -988,6 +988,73 @@ const generateShipmentManifest = async (actor, shipmentId, payload = {}) => {
   return formatShipment(shipment.toObject());
 };
 
+const findShiprocketShipmentByWebhookIdentifiers = async ({
+  awbCode = '',
+  providerOrderId = '',
+  providerShipmentId = '',
+  sourceOrderReference = '',
+}) => {
+  const matchConditions = [];
+
+  if (awbCode) {
+    matchConditions.push({ awbCode });
+  }
+
+  if (providerOrderId) {
+    matchConditions.push({ providerOrderId });
+  }
+
+  if (providerShipmentId) {
+    matchConditions.push({ providerShipmentId });
+  }
+
+  if (matchConditions.length > 0) {
+    const directShipment = await Shipment.findOne({
+      provider: SHIPPING_PROVIDER.SHIPROCKET,
+      $or: matchConditions,
+    })
+      .sort({ createdAt: -1 })
+      .exec();
+
+    if (directShipment) {
+      return directShipment;
+    }
+  }
+
+  if (!sourceOrderReference) {
+    return null;
+  }
+
+  const linkedOrder = await Order.findOne({ orderNumber: sourceOrderReference })
+    .select('_id')
+    .lean()
+    .exec();
+
+  if (!linkedOrder?._id) {
+    return null;
+  }
+
+  const draftShipment = await Shipment.findOne({
+    provider: SHIPPING_PROVIDER.SHIPROCKET,
+    orderId: linkedOrder._id,
+    awbCode: '',
+    providerShipmentId: '',
+  })
+    .sort({ createdAt: -1 })
+    .exec();
+
+  if (draftShipment) {
+    return draftShipment;
+  }
+
+  return Shipment.findOne({
+    provider: SHIPPING_PROVIDER.SHIPROCKET,
+    orderId: linkedOrder._id,
+  })
+    .sort({ createdAt: -1 })
+    .exec();
+};
+
 const handleShiprocketWebhook = async (req) => {
   assertDatabaseReady();
 
@@ -1014,32 +1081,26 @@ const handleShiprocketWebhook = async (req) => {
   const awbCode = normalizeText(providerResult.awbCode || payload.awb);
   const providerOrderId = normalizeText(payload.sr_order_id);
   const providerShipmentId = normalizeText(payload.shipment_id);
-  const matchConditions = [];
+  const sourceOrderReference = normalizeText(
+    payload.order_id ||
+    payload.channel_order_id ||
+    payload.channelOrderId,
+  );
 
-  if (awbCode) {
-    matchConditions.push({ awbCode });
-  }
-
-  if (providerOrderId) {
-    matchConditions.push({ providerOrderId });
-  }
-
-  if (providerShipmentId) {
-    matchConditions.push({ providerShipmentId });
-  }
-
-  if (matchConditions.length === 0) {
+  if (!awbCode && !providerOrderId && !providerShipmentId && !sourceOrderReference) {
     return {
       matched: false,
       provider: SHIPPING_PROVIDER.SHIPROCKET,
-      reason: 'No shipment identifiers found in webhook payload',
+      reason: 'No shipment identifiers or source order reference found in webhook payload',
     };
   }
 
-  const shipment = await Shipment.findOne({
-    provider: SHIPPING_PROVIDER.SHIPROCKET,
-    $or: matchConditions,
-  }).exec();
+  const shipment = await findShiprocketShipmentByWebhookIdentifiers({
+    awbCode,
+    providerOrderId,
+    providerShipmentId,
+    sourceOrderReference,
+  });
 
   if (!shipment) {
     return {
@@ -1053,6 +1114,15 @@ const handleShiprocketWebhook = async (req) => {
   const now = new Date();
   const previousStatus = shipment.status;
   const previousProviderStatus = shipment.providerStatus;
+
+  shipment.awbCode = shipment.awbCode || awbCode;
+  shipment.awbAssignedAt = shipment.awbCode ? shipment.awbAssignedAt || now : shipment.awbAssignedAt;
+  shipment.providerOrderId = shipment.providerOrderId || providerOrderId;
+  shipment.providerOrderCreatedAt = shipment.providerOrderId
+    ? shipment.providerOrderCreatedAt || now
+    : shipment.providerOrderCreatedAt;
+  shipment.providerShipmentId = shipment.providerShipmentId || providerShipmentId;
+
   const status = applyTrackingSnapshotToShipment({ now, providerResult, shipment });
 
   mergeShipmentRawProviderResponse(shipment, 'webhook', payload);
@@ -1096,10 +1166,24 @@ const updateShipmentStatus = async (actor, shipmentId, payload = {}) => {
 
   if (hasOwn(payload, 'awbCode')) {
     shipment.awbCode = normalizeText(payload.awbCode);
+    shipment.awbAssignedAt = shipment.awbCode
+      ? shipment.awbAssignedAt || now
+      : null;
   }
 
   if (hasOwn(payload, 'courierName')) {
     shipment.courierName = normalizeText(payload.courierName);
+  }
+
+  if (hasOwn(payload, 'providerOrderId')) {
+    shipment.providerOrderId = normalizeText(payload.providerOrderId);
+    shipment.providerOrderCreatedAt = shipment.providerOrderId
+      ? shipment.providerOrderCreatedAt || now
+      : null;
+  }
+
+  if (hasOwn(payload, 'providerShipmentId')) {
+    shipment.providerShipmentId = normalizeText(payload.providerShipmentId);
   }
 
   if (hasOwn(payload, 'trackingUrl')) {
