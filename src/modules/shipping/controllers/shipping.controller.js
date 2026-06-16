@@ -6,14 +6,6 @@ const getStatus = async (req, res) => {
   return sendSuccess(res, shippingService.getStatusData(), 'Shipping module ready');
 };
 
-const listOrderShipments = async (req, res) => {
-  return sendSuccess(
-    res,
-    await shippingService.getOrderShipments(req.params.orderId, { includeEvents: true }),
-    'Shipments fetched',
-  );
-};
-
 const testShippingProviderConnection = async (req, res) => {
   return sendSuccess(
     res,
@@ -22,36 +14,11 @@ const testShippingProviderConnection = async (req, res) => {
   );
 };
 
-const getCourierOptionsForOrder = async (req, res) => {
-  return sendSuccess(
-    res,
-    await shippingService.getCourierOptionsForOrder(req.user, req.params.orderId, req.query),
-    'Courier options fetched',
-  );
-};
-
-const getProviderPickupLocations = async (req, res) => {
-  return sendSuccess(
-    res,
-    await shippingService.getProviderPickupLocations(req.user, req.params.providerName),
-    'Provider pickup locations fetched',
-  );
-};
-
 const markOrderPacked = async (req, res) => {
   return sendSuccess(
     res,
     await shippingService.markOrderPacked(req.user, req.params.orderId, req.body),
     'Order marked packed',
-  );
-};
-
-const createShipmentForOrder = async (req, res) => {
-  return sendSuccess(
-    res,
-    await shippingService.createShipmentForOrder(req.user, req.params.orderId, req.body),
-    'Shipment created',
-    201,
   );
 };
 
@@ -105,46 +72,6 @@ const deletePickupLocation = async (req, res) => {
   );
 };
 
-const updateShipmentStatus = async (req, res) => {
-  return sendSuccess(
-    res,
-    await shippingService.updateShipmentStatus(req.user, req.params.shipmentId, req.body),
-    'Shipment updated',
-  );
-};
-
-const assignAwbToShipment = async (req, res) => {
-  return sendSuccess(
-    res,
-    await shippingService.assignAwbToShipment(req.user, req.params.shipmentId, req.body),
-    'AWB assigned',
-  );
-};
-
-const schedulePickupForShipment = async (req, res) => {
-  return sendSuccess(
-    res,
-    await shippingService.schedulePickupForShipment(req.user, req.params.shipmentId, req.body),
-    'Pickup scheduled',
-  );
-};
-
-const generateShipmentLabel = async (req, res) => {
-  return sendSuccess(
-    res,
-    await shippingService.generateShipmentLabel(req.user, req.params.shipmentId, req.body),
-    'Shipment label generated',
-  );
-};
-
-const generateShipmentManifest = async (req, res) => {
-  return sendSuccess(
-    res,
-    await shippingService.generateShipmentManifest(req.user, req.params.shipmentId, req.body),
-    'Shipment manifest generated',
-  );
-};
-
 const syncShipmentTracking = async (req, res) => {
   return sendSuccess(
     res,
@@ -161,58 +88,30 @@ const handleShiprocketWebhook = async (req, res) => {
   );
 };
 
-const cancelShipment = async (req, res) => {
-  return sendSuccess(
-    res,
-    await shippingService.cancelShipment(req.user, req.params.shipmentId, req.body),
-    'Shipment cancelled',
-  );
-};
-
 export {
-  assignAwbToShipment,
-  cancelShipment,
   createPickupLocation,
   createProviderOrderForOrder,
-  createShipmentForOrder,
   deletePickupLocation,
   getAdminPickupLocation,
-  getCourierOptionsForOrder,
-  getProviderPickupLocations,
   getStatus,
-  generateShipmentLabel,
-  generateShipmentManifest,
   handleShiprocketWebhook,
   listAdminPickupLocations,
-  listOrderShipments,
   markOrderPacked,
-  schedulePickupForShipment,
   syncShipmentTracking,
   testShippingProviderConnection,
   updatePickupLocation,
-  updateShipmentStatus,
 };
 
 export default {
-  assignAwbToShipment,
-  cancelShipment,
   createPickupLocation,
   createProviderOrderForOrder,
-  createShipmentForOrder,
   deletePickupLocation,
   getAdminPickupLocation,
-  getCourierOptionsForOrder,
-  getProviderPickupLocations,
   getStatus,
-  generateShipmentLabel,
-  generateShipmentManifest,
   handleShiprocketWebhook,
   listAdminPickupLocations,
-  listOrderShipments,
   markOrderPacked,
-  schedulePickupForShipment,
   syncShipmentTracking,
   testShippingProviderConnection,
   updatePickupLocation,
-  updateShipmentStatus,
 };

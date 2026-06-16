@@ -5,7 +5,6 @@ import { sendSuccess } from '@/common/helpers/response.helper.js';
 import { ORDER_STATUS, PAYMENT_STATUS } from '@/common/constants/order.constant.js';
 import {
   SHIPMENT_STATUS,
-  SHIPMENT_TERMINAL_STATUSES,
   SHIPPING_PROVIDER,
 } from '@/common/constants/shipping.constant.js';
 import shiprocketConfig from '@/config/shiprocket.config.js';
@@ -17,7 +16,6 @@ import {
 import {
   assertDatabaseReady,
   getDocumentId,
-  hasOwn,
   normalizeObjectId,
   normalizeOptionalNumber,
   normalizeOptionalObjectId,
@@ -31,7 +29,7 @@ import ShipmentEvent from '@/modules/shipping/models/shipment-event.model.js';
 import Shipment from '@/modules/shipping/models/shipment.model.js';
 import pickupLocationService from '@/modules/shipping/services/pickup-location.service.js';
 import { getShippingProvider, listShippingProviders } from '@/modules/shipping/providers/shipping-provider.registry.js';
-import { formatShipment, formatShipmentEvent } from '@/modules/shipping/services/shipment-formatters.js';
+import { formatShipment } from '@/modules/shipping/services/shipment-formatters.js';
 
 const getStatusData = () => ({
   module: 'shipping',
@@ -144,20 +142,6 @@ const shipmentStatusesForShippedOrder = new Set([
   SHIPMENT_STATUS.IN_TRANSIT,
   SHIPMENT_STATUS.OUT_FOR_DELIVERY,
   SHIPMENT_STATUS.PICKED_UP,
-]);
-
-const manifestReadyStatuses = new Set([
-  SHIPMENT_STATUS.PICKUP_SCHEDULED,
-  SHIPMENT_STATUS.PICKED_UP,
-  SHIPMENT_STATUS.IN_TRANSIT,
-  SHIPMENT_STATUS.OUT_FOR_DELIVERY,
-]);
-
-const nonCancelableShipmentStatuses = new Set([
-  ...SHIPMENT_TERMINAL_STATUSES,
-  SHIPMENT_STATUS.PICKED_UP,
-  SHIPMENT_STATUS.IN_TRANSIT,
-  SHIPMENT_STATUS.OUT_FOR_DELIVERY,
 ]);
 
 const assertOrderCanBeFulfilled = (order) => {
@@ -308,8 +292,21 @@ const applyTrackingSnapshotToShipment = ({ now = new Date(), providerResult, shi
   const status = normalizeShipmentStatus(providerResult.status || shipment.status || SHIPMENT_STATUS.LABEL_CREATED);
 
   shipment.awbCode = providerResult.awbCode || shipment.awbCode;
+  shipment.awbAssignedAt = shipment.awbAssignedAt || (providerResult.awbCode ? now : null);
+  shipment.courierCompanyId = providerResult.courierCompanyId || shipment.courierCompanyId;
+  shipment.courierCharge = providerResult.courierCharge ?? shipment.courierCharge;
   shipment.courierName = providerResult.courierName || shipment.courierName;
+  shipment.estimatedDeliveryDays = providerResult.estimatedDeliveryDays || shipment.estimatedDeliveryDays;
+  shipment.invoiceUrl = providerResult.invoiceUrl || shipment.invoiceUrl;
+  shipment.labelUrl = providerResult.labelUrl || shipment.labelUrl;
   shipment.lastSyncedAt = now;
+  shipment.manifestUrl = providerResult.manifestUrl || shipment.manifestUrl;
+  shipment.pickupTokenNumber = providerResult.pickupTokenNumber || shipment.pickupTokenNumber;
+  shipment.providerOrderId = providerResult.providerOrderId || shipment.providerOrderId;
+  shipment.providerOrderCreatedAt = shipment.providerOrderId
+    ? shipment.providerOrderCreatedAt || now
+    : shipment.providerOrderCreatedAt;
+  shipment.providerShipmentId = providerResult.providerShipmentId || shipment.providerShipmentId;
   shipment.providerStatus = normalizeText(providerResult.providerStatus) || shipment.providerStatus;
   shipment.status = status;
   shipment.trackingUrl = providerResult.trackingUrl || shipment.trackingUrl;
@@ -344,28 +341,6 @@ const persistTrackingEvents = async ({ events = [], shipment }) => {
   }
 };
 
-const getShipmentEventsByShipmentIds = async (shipmentIds = []) => {
-  if (!shipmentIds.length) {
-    return new Map();
-  }
-
-  const events = await ShipmentEvent.find({ shipmentId: { $in: shipmentIds } })
-    .sort({ eventAt: -1, createdAt: -1 })
-    .lean()
-    .exec();
-  const eventsByShipmentId = new Map();
-
-  for (const event of events) {
-    const shipmentId = getDocumentId(event.shipmentId);
-    const shipmentEvents = eventsByShipmentId.get(shipmentId) || [];
-
-    shipmentEvents.push(formatShipmentEvent(event));
-    eventsByShipmentId.set(shipmentId, shipmentEvents);
-  }
-
-  return eventsByShipmentId;
-};
-
 const testShippingProviderConnection = async (providerName = SHIPPING_PROVIDER.SHIPROCKET) => {
   assertDatabaseReady();
   const normalizedProviderName = normalizeShippingProvider(providerName);
@@ -394,46 +369,6 @@ const testShippingProviderConnection = async (providerName = SHIPPING_PROVIDER.S
       ),
     ),
   };
-};
-
-const getProviderPickupLocations = async (actor, providerName = SHIPPING_PROVIDER.SHIPROCKET) => {
-  assertDatabaseReady();
-  normalizeActorId(actor);
-
-  const normalizedProviderName = normalizeShippingProvider(providerName);
-  const provider = getShippingProvider(normalizedProviderName);
-
-  if (!provider.listPickupLocations) {
-    return {
-      items: [],
-      provider: normalizedProviderName,
-    };
-  }
-
-  const providerResult = await provider.listPickupLocations();
-
-  return {
-    items: Array.isArray(providerResult.items) ? providerResult.items : [],
-    provider: normalizedProviderName,
-  };
-};
-
-const getOrderShipments = async (orderId, { includeEvents = false } = {}) => {
-  const shipments = await Shipment.find({ orderId })
-    .sort({ createdAt: -1 })
-    .lean()
-    .exec();
-
-  if (!includeEvents || shipments.length === 0) {
-    return shipments.map(formatShipment);
-  }
-
-  const eventsByShipmentId = await getShipmentEventsByShipmentIds(shipments.map((shipment) => shipment._id));
-
-  return shipments.map((shipment) => ({
-    ...formatShipment(shipment),
-    events: eventsByShipmentId.get(getDocumentId(shipment._id)) || [],
-  }));
 };
 
 const markOrderPacked = async (actor, orderId, payload = {}) => {
@@ -539,45 +474,6 @@ const resolveShipmentContext = async ({ order, payload = {} }) => {
   };
 };
 
-const getCourierOptionsForOrder = async (actor, orderId, payload = {}) => {
-  assertDatabaseReady();
-  normalizeActorId(actor);
-
-  const providerName = normalizeShippingProvider(payload.provider);
-  const provider = getShippingProvider(providerName);
-  const order = await getOrderForFulfillment(orderId);
-
-  assertOrderCanBeFulfilled(order);
-
-  if (![ORDER_STATUS.CONFIRMED, ORDER_STATUS.PACKED, ORDER_STATUS.SHIPPED].includes(order.status)) {
-    throw new ApiError(400, `Courier options cannot be fetched from status: ${order.status}`);
-  }
-
-  if (!provider.getCourierOptions) {
-    return {
-      couriers: [],
-      provider: providerName,
-    };
-  }
-
-  const {
-    items,
-    resolvedPayload,
-    user,
-  } = await resolveShipmentContext({ order, payload });
-  const providerResult = await provider.getCourierOptions({
-    items,
-    order,
-    payload: resolvedPayload,
-    user,
-  });
-
-  return {
-    couriers: providerResult.couriers || [],
-    provider: providerName,
-  };
-};
-
 const createProviderOrderForOrder = async (actor, orderId, payload = {}) => {
   assertDatabaseReady();
   const actorId = normalizeActorId(actor);
@@ -635,57 +531,6 @@ const createProviderOrderForOrder = async (actor, orderId, payload = {}) => {
   return formatShipment(shipment.toObject());
 };
 
-const createShipmentForOrder = async (actor, orderId, payload = {}) => {
-  assertDatabaseReady();
-  const actorId = normalizeActorId(actor);
-  const providerName = normalizeShippingProvider(payload.provider);
-  const provider = getShippingProvider(providerName);
-  const order = await getOrderForFulfillment(orderId);
-
-  assertOrderCanBeFulfilled(order);
-
-  if (![ORDER_STATUS.CONFIRMED, ORDER_STATUS.PACKED, ORDER_STATUS.SHIPPED].includes(order.status)) {
-    throw new ApiError(400, `Order cannot be shipped from status: ${order.status}`);
-  }
-
-  const {
-    items,
-    resolvedPayload,
-    user,
-  } = await resolveShipmentContext({ order, payload });
-  const providerResult = await provider.createShipment({
-    items,
-    order,
-    payload: resolvedPayload,
-    user,
-  });
-  const shipment = await Shipment.create(buildShipmentPayload({
-    order,
-    payload: resolvedPayload,
-    providerResult: {
-      ...providerResult,
-      provider: providerName,
-    },
-  }));
-  const nextOrderStatus = getOrderStatusFromShipmentStatus(shipment.status, order.status);
-
-  await createShipmentEvent({
-    message: normalizeText(payload.note) || `Shipment created with ${providerName}`,
-    rawEvent: providerResult.rawProviderResponse,
-    shipment,
-    status: shipment.status,
-  });
-
-  await updateOrderStatus({
-    actorId,
-    nextStatus: nextOrderStatus,
-    note: `Shipment ${shipment.awbCode || shipment._id.toString()} created via ${providerName}`,
-    order,
-  });
-
-  return formatShipment(shipment.toObject());
-};
-
 const getShipmentForAdmin = async (shipmentId) => {
   const normalizedShipmentId = normalizeObjectId(shipmentId, 'shipment id');
   const shipment = await Shipment.findById(normalizedShipmentId).exec();
@@ -695,139 +540,6 @@ const getShipmentForAdmin = async (shipmentId) => {
   }
 
   return shipment;
-};
-
-const assignAwbToShipment = async (actor, shipmentId, payload = {}) => {
-  assertDatabaseReady();
-  const actorId = normalizeActorId(actor);
-  const shipment = await getShipmentForAdmin(shipmentId);
-  const order = await getOrderForFulfillment(shipment.orderId);
-  const provider = getShippingProvider(shipment.provider);
-  const now = new Date();
-
-  assertOrderCanBeFulfilled(order);
-
-  if (!provider.assignAwbToShipment) {
-    throw new ApiError(400, `${shipment.provider} does not support AWB assignment separately`);
-  }
-
-  if (!shipment.providerShipmentId) {
-    throw new ApiError(400, 'Provider shipment id is required before assigning AWB');
-  }
-
-  const providerResult = await provider.assignAwbToShipment({ payload, shipment });
-  const status = normalizeShipmentStatus(providerResult.status || shipment.status || SHIPMENT_STATUS.LABEL_CREATED);
-
-  shipment.awbCode = providerResult.awbCode || shipment.awbCode;
-  shipment.awbAssignedAt = shipment.awbAssignedAt || (providerResult.awbCode ? now : null);
-  shipment.courierCharge = providerResult.courierCharge ?? shipment.courierCharge;
-  shipment.courierCompanyId = providerResult.courierCompanyId || shipment.courierCompanyId;
-  shipment.courierName = providerResult.courierName || shipment.courierName;
-  shipment.estimatedDeliveryDays = providerResult.estimatedDeliveryDays || shipment.estimatedDeliveryDays;
-  shipment.invoiceUrl = providerResult.invoiceUrl || shipment.invoiceUrl;
-  shipment.labelUrl = providerResult.labelUrl || shipment.labelUrl;
-  shipment.lastSyncedAt = now;
-  shipment.providerStatus = providerResult.providerStatus || shipment.providerStatus;
-  shipment.rawProviderResponse = {
-    ...(shipment.rawProviderResponse && typeof shipment.rawProviderResponse === 'object'
-      ? shipment.rawProviderResponse
-      : { createProviderOrder: shipment.rawProviderResponse }),
-    assignAwb: providerResult.rawProviderResponse || null,
-  };
-  shipment.status = status;
-  shipment.trackingUrl = providerResult.trackingUrl || shipment.trackingUrl;
-
-  if (shipmentStatusesForShippedOrder.has(status) && !shipment.shippedAt) {
-    shipment.shippedAt = normalizeOptionalDate(payload.shippedAt, 'shippedAt') || now;
-  }
-
-  await shipment.save();
-  await createShipmentEvent({
-    message: normalizeText(payload.note) || `AWB assigned for ${shipment.provider}`,
-    rawEvent: providerResult.rawProviderResponse,
-    shipment,
-    status,
-  });
-
-  await updateOrderStatus({
-    actorId,
-    nextStatus: getOrderStatusFromShipmentStatus(status, order.status),
-    note: `Shipment ${shipment.awbCode || shipment._id.toString()} AWB assigned via ${shipment.provider}`,
-    order,
-  });
-
-  return formatShipment(shipment.toObject());
-};
-
-const schedulePickupForShipment = async (actor, shipmentId, payload = {}) => {
-  assertDatabaseReady();
-  const actorId = normalizeActorId(actor);
-  const shipment = await getShipmentForAdmin(shipmentId);
-  const order = await getOrderForFulfillment(shipment.orderId);
-  const provider = getShippingProvider(shipment.provider);
-  const now = new Date();
-
-  assertOrderCanBeFulfilled(order);
-
-  if (!provider.schedulePickupForShipment) {
-    throw new ApiError(400, `${shipment.provider} does not support pickup scheduling`);
-  }
-
-  if (!shipment.awbCode) {
-    throw new ApiError(400, 'AWB must be assigned before scheduling pickup');
-  }
-
-  if (
-    [
-      SHIPMENT_STATUS.PICKUP_SCHEDULED,
-      SHIPMENT_STATUS.PICKED_UP,
-      SHIPMENT_STATUS.IN_TRANSIT,
-      SHIPMENT_STATUS.OUT_FOR_DELIVERY,
-      SHIPMENT_STATUS.DELIVERED,
-      SHIPMENT_STATUS.CANCELLED,
-      SHIPMENT_STATUS.RTO,
-      SHIPMENT_STATUS.LOST,
-    ].includes(shipment.status)
-  ) {
-    throw new ApiError(400, `Pickup cannot be scheduled from status: ${shipment.status}`);
-  }
-
-  const providerResult = await provider.schedulePickupForShipment({ payload, shipment });
-  const status = normalizeShipmentStatus(providerResult.status || SHIPMENT_STATUS.PICKUP_SCHEDULED);
-
-  shipment.labelUrl = providerResult.labelUrl || shipment.labelUrl;
-  shipment.lastSyncedAt = now;
-  shipment.manifestUrl = providerResult.manifestUrl || shipment.manifestUrl;
-  shipment.pickupScheduledAt = normalizeOptionalDate(
-    providerResult.pickupScheduledAt || payload.pickupScheduledAt,
-    'pickupScheduledAt',
-  ) || shipment.pickupScheduledAt || now;
-  shipment.pickupTokenNumber = normalizeText(providerResult.pickupTokenNumber) || shipment.pickupTokenNumber;
-  shipment.providerStatus = providerResult.providerStatus || shipment.providerStatus;
-  shipment.rawProviderResponse = {
-    ...(shipment.rawProviderResponse && typeof shipment.rawProviderResponse === 'object'
-      ? shipment.rawProviderResponse
-      : { previous: shipment.rawProviderResponse }),
-    schedulePickup: providerResult.rawProviderResponse || null,
-  };
-  shipment.status = status;
-
-  await shipment.save();
-  await createShipmentEvent({
-    message: normalizeText(payload.note) || `Pickup scheduled for ${shipment.provider}`,
-    rawEvent: providerResult.rawProviderResponse,
-    shipment,
-    status,
-  });
-
-  await updateOrderStatus({
-    actorId,
-    nextStatus: getOrderStatusFromShipmentStatus(status, order.status),
-    note: `Pickup scheduled for shipment ${shipment.awbCode || shipment._id.toString()}`,
-    order,
-  });
-
-  return formatShipment(shipment.toObject());
 };
 
 const syncShipmentTracking = async (actor, shipmentId, payload = {}) => {
@@ -869,119 +581,6 @@ const syncShipmentTracking = async (actor, shipmentId, payload = {}) => {
     actorId,
     nextStatus: getOrderStatusFromShipmentStatus(status, order.status),
     note: `Tracking synced for shipment ${shipment.awbCode || shipment._id.toString()}`,
-    order,
-  });
-
-  return formatShipment(shipment.toObject());
-};
-
-const generateShipmentLabel = async (actor, shipmentId, payload = {}) => {
-  assertDatabaseReady();
-  const actorId = normalizeActorId(actor);
-  const shipment = await getShipmentForAdmin(shipmentId);
-  const order = await getOrderForFulfillment(shipment.orderId);
-  const provider = getShippingProvider(shipment.provider);
-  const now = new Date();
-
-  assertOrderCanBeFulfilled(order);
-
-  if (!provider.generateLabelForShipment) {
-    throw new ApiError(400, `${shipment.provider} does not support label generation`);
-  }
-
-  if (!shipment.providerShipmentId) {
-    throw new ApiError(400, 'Provider shipment id is required before generating label');
-  }
-
-  if (!shipment.awbCode) {
-    throw new ApiError(400, 'AWB must be assigned before generating label');
-  }
-
-  if (SHIPMENT_TERMINAL_STATUSES.includes(shipment.status)) {
-    throw new ApiError(400, `Label cannot be generated from status: ${shipment.status}`);
-  }
-
-  const providerResult = await provider.generateLabelForShipment({ payload, shipment });
-  const status = normalizeShipmentStatus(providerResult.status || shipment.status || SHIPMENT_STATUS.LABEL_CREATED);
-
-  shipment.labelUrl = providerResult.labelUrl || shipment.labelUrl;
-  shipment.lastSyncedAt = now;
-  shipment.providerStatus = providerResult.providerStatus || shipment.providerStatus;
-  shipment.status = status;
-
-  mergeShipmentRawProviderResponse(shipment, 'generateLabel', providerResult.rawProviderResponse || null);
-  await shipment.save();
-  await createShipmentEvent({
-    message: normalizeText(payload.note) || `Shipping label generated for ${shipment.provider}`,
-    rawEvent: providerResult.rawProviderResponse,
-    shipment,
-    status,
-  });
-
-  await updateOrderStatus({
-    actorId,
-    nextStatus: getOrderStatusFromShipmentStatus(status, order.status),
-    note: `Shipping label generated for shipment ${shipment.awbCode || shipment._id.toString()}`,
-    order,
-  });
-
-  return formatShipment(shipment.toObject());
-};
-
-const generateShipmentManifest = async (actor, shipmentId, payload = {}) => {
-  assertDatabaseReady();
-  const actorId = normalizeActorId(actor);
-  const shipment = await getShipmentForAdmin(shipmentId);
-  const order = await getOrderForFulfillment(shipment.orderId);
-  const provider = getShippingProvider(shipment.provider);
-  const now = new Date();
-
-  assertOrderCanBeFulfilled(order);
-
-  if (!provider.generateManifestForShipment) {
-    throw new ApiError(400, `${shipment.provider} does not support manifest generation`);
-  }
-
-  if (!shipment.providerShipmentId) {
-    throw new ApiError(400, 'Provider shipment id is required before generating manifest');
-  }
-
-  if (!shipment.awbCode) {
-    throw new ApiError(400, 'AWB must be assigned before generating manifest');
-  }
-
-  if (
-    !shipment.pickupScheduledAt &&
-    !manifestReadyStatuses.has(shipment.status)
-  ) {
-    throw new ApiError(400, 'Pickup must be scheduled before generating manifest');
-  }
-
-  if (SHIPMENT_TERMINAL_STATUSES.includes(shipment.status)) {
-    throw new ApiError(400, `Manifest cannot be generated from status: ${shipment.status}`);
-  }
-
-  const providerResult = await provider.generateManifestForShipment({ payload, shipment });
-  const status = normalizeShipmentStatus(providerResult.status || shipment.status || SHIPMENT_STATUS.PICKUP_SCHEDULED);
-
-  shipment.lastSyncedAt = now;
-  shipment.manifestUrl = providerResult.manifestUrl || shipment.manifestUrl;
-  shipment.providerStatus = providerResult.providerStatus || shipment.providerStatus;
-  shipment.status = status;
-
-  mergeShipmentRawProviderResponse(shipment, 'generateManifest', providerResult.rawProviderResponse || null);
-  await shipment.save();
-  await createShipmentEvent({
-    message: normalizeText(payload.note) || `Manifest generated for ${shipment.provider}`,
-    rawEvent: providerResult.rawProviderResponse,
-    shipment,
-    status,
-  });
-
-  await updateOrderStatus({
-    actorId,
-    nextStatus: getOrderStatusFromShipmentStatus(status, order.status),
-    note: `Manifest generated for shipment ${shipment.awbCode || shipment._id.toString()}`,
     order,
   });
 
@@ -1156,153 +755,26 @@ const handleShiprocketWebhook = async (req) => {
   };
 };
 
-const updateShipmentStatus = async (actor, shipmentId, payload = {}) => {
-  assertDatabaseReady();
-  const actorId = normalizeActorId(actor);
-  const status = normalizeShipmentStatus(payload.status);
-  const shipment = await getShipmentForAdmin(shipmentId);
-  const order = await getOrderForFulfillment(shipment.orderId);
-  const now = new Date();
-
-  if (hasOwn(payload, 'awbCode')) {
-    shipment.awbCode = normalizeText(payload.awbCode);
-    shipment.awbAssignedAt = shipment.awbCode
-      ? shipment.awbAssignedAt || now
-      : null;
-  }
-
-  if (hasOwn(payload, 'courierName')) {
-    shipment.courierName = normalizeText(payload.courierName);
-  }
-
-  if (hasOwn(payload, 'providerOrderId')) {
-    shipment.providerOrderId = normalizeText(payload.providerOrderId);
-    shipment.providerOrderCreatedAt = shipment.providerOrderId
-      ? shipment.providerOrderCreatedAt || now
-      : null;
-  }
-
-  if (hasOwn(payload, 'providerShipmentId')) {
-    shipment.providerShipmentId = normalizeText(payload.providerShipmentId);
-  }
-
-  if (hasOwn(payload, 'trackingUrl')) {
-    shipment.trackingUrl = normalizeText(payload.trackingUrl);
-  }
-
-  shipment.status = status;
-  shipment.providerStatus = normalizeText(payload.providerStatus) || shipment.providerStatus;
-  shipment.lastSyncedAt = now;
-
-  if (status === SHIPMENT_STATUS.DELIVERED && !shipment.deliveredAt) {
-    shipment.deliveredAt = normalizeOptionalDate(payload.deliveredAt, 'deliveredAt') || now;
-  }
-
-  if (shipmentStatusesForShippedOrder.has(status) && !shipment.shippedAt) {
-    shipment.shippedAt = normalizeOptionalDate(payload.shippedAt, 'shippedAt') || now;
-  }
-
-  if (status === SHIPMENT_STATUS.CANCELLED && !shipment.cancelledAt) {
-    shipment.cancelledAt = now;
-  }
-
-  await shipment.save();
-  await createShipmentEvent({
-    eventAt: normalizeOptionalDate(payload.eventAt, 'eventAt'),
-    location: normalizeText(payload.location),
-    message: normalizeText(payload.note) || `Shipment marked ${status}`,
-    shipment,
-    status,
-  });
-
-  await updateOrderStatus({
-    actorId,
-    nextStatus: getOrderStatusFromShipmentStatus(status, order.status),
-    note: `Shipment ${shipment.awbCode || shipment._id.toString()} marked ${status}`,
-    order,
-  });
-
-  return formatShipment(shipment.toObject());
-};
-
-const cancelShipment = async (actor, shipmentId, payload = {}) => {
-  assertDatabaseReady();
-  const actorId = normalizeActorId(actor);
-  const shipment = await getShipmentForAdmin(shipmentId);
-  const order = await getOrderForFulfillment(shipment.orderId);
-  const provider = getShippingProvider(shipment.provider);
-
-  if (nonCancelableShipmentStatuses.has(shipment.status)) {
-    throw new ApiError(400, `Shipment cannot be cancelled from status: ${shipment.status}`);
-  }
-
-  const providerResult = await provider.cancelShipment({ payload, shipment });
-  const now = new Date();
-
-  shipment.cancelledAt = shipment.cancelledAt || now;
-  shipment.lastSyncedAt = now;
-  shipment.providerStatus = providerResult.providerStatus || shipment.providerStatus;
-  shipment.rawProviderResponse = providerResult.rawProviderResponse || shipment.rawProviderResponse;
-  shipment.status = SHIPMENT_STATUS.CANCELLED;
-
-  await shipment.save();
-  await createShipmentEvent({
-    message: normalizeText(payload.note) || 'Shipment cancelled',
-    rawEvent: providerResult.rawProviderResponse,
-    shipment,
-    status: SHIPMENT_STATUS.CANCELLED,
-  });
-
-  await updateOrderStatus({
-    actorId,
-    nextStatus: getOrderStatusFromShipmentStatus(SHIPMENT_STATUS.CANCELLED, order.status),
-    note: `Shipment ${shipment.awbCode || shipment._id.toString()} cancelled`,
-    order,
-  });
-
-  return formatShipment(shipment.toObject());
-};
-
 const getStatus = async (req, res) => {
   return sendSuccess(res, getStatusData(), 'Shipping module ready');
 };
 
 export {
-  assignAwbToShipment,
-  cancelShipment,
   createProviderOrderForOrder,
-  createShipmentForOrder,
-  generateShipmentLabel,
-  generateShipmentManifest,
-  getProviderPickupLocations,
   handleShiprocketWebhook,
-  schedulePickupForShipment,
-  getCourierOptionsForOrder,
-  getOrderShipments,
   getStatus,
   getStatusData,
   markOrderPacked,
   syncShipmentTracking,
   testShippingProviderConnection,
-  updateShipmentStatus,
 };
 
 export default {
-  assignAwbToShipment,
-  cancelShipment,
   createProviderOrderForOrder,
-  createShipmentForOrder,
-  generateShipmentLabel,
-  generateShipmentManifest,
-  getProviderPickupLocations,
   handleShiprocketWebhook,
-  schedulePickupForShipment,
-  getCourierOptionsForOrder,
-  getOrderShipments,
   getStatus,
   getStatusData,
   markOrderPacked,
   syncShipmentTracking,
   testShippingProviderConnection,
-  updateShipmentStatus,
 };

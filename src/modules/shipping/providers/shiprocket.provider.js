@@ -106,9 +106,7 @@ const hasMeaningfulValue = (value) => {
   return true;
 };
 
-const sleep = (ms) => new Promise((resolve) => {
-  setTimeout(resolve, ms);
-});
+const normalizeText = (value = '') => String(value || '').trim();
 
 const findNestedValueByKeys = (value, keys = [], visited = new Set()) => {
   if (!hasMeaningfulValue(value)) {
@@ -158,6 +156,84 @@ const findNestedValueByKeys = (value, keys = [], visited = new Set()) => {
   }
 
   return '';
+};
+
+const looksLikePickupLocation = (value = {}) => (
+  value &&
+  typeof value === 'object' &&
+  (
+    hasMeaningfulValue(value.pickup_location) ||
+    hasMeaningfulValue(value.pickupLocation) ||
+    hasMeaningfulValue(value.seller_name) ||
+    hasMeaningfulValue(value.name)
+  )
+);
+
+const collectPickupLocations = (value, visited = new Set()) => {
+  if (!value || typeof value !== 'object') {
+    return [];
+  }
+
+  if (visited.has(value)) {
+    return [];
+  }
+
+  visited.add(value);
+
+  if (Array.isArray(value)) {
+    return value.flatMap((item) => collectPickupLocations(item, visited));
+  }
+
+  const nestedLocations = Object.values(value).flatMap((nestedValue) => (
+    collectPickupLocations(nestedValue, visited)
+  ));
+
+  return looksLikePickupLocation(value)
+    ? [value, ...nestedLocations]
+    : nestedLocations;
+};
+
+const getPickupLocationName = (location = {}) => normalizeText(
+  location.pickup_location ||
+  location.pickupLocation ||
+  location.name ||
+  location.seller_name ||
+  '',
+);
+
+const isActivePickupLocation = (location = {}) => {
+  const status = normalizeText(location.status || location.is_active || location.isActive).toLowerCase();
+
+  return !['0', 'false', 'inactive', 'disabled'].includes(status);
+};
+
+const fetchDefaultPickupLocation = async () => {
+  const providerResponse = await getJson(
+    buildShiprocketUrl('/settings/company/pickup'),
+    {
+      headers: await getAuthHeaders(),
+    },
+  );
+  const pickupLocations = collectPickupLocations(providerResponse)
+    .filter((location) => getPickupLocationName(location));
+  const selectedLocation = pickupLocations.find(isActivePickupLocation) || pickupLocations[0];
+  const pickupLocation = getPickupLocationName(selectedLocation);
+
+  if (!pickupLocation) {
+    throw new ApiError(
+      503,
+      'Shiprocket pickup location is required. Configure a pickup location in Shiprocket or set SHIPROCKET_PICKUP_LOCATION in ravenFold-be/.env.',
+      { providerResponse },
+    );
+  }
+
+  return pickupLocation;
+};
+
+const resolvePickupLocation = async (payload = {}) => {
+  const configuredPickupLocation = normalizeText(payload.pickupLocation || shiprocketConfig.pickupLocation);
+
+  return configuredPickupLocation || fetchDefaultPickupLocation();
 };
 
 const getShiprocketRawValue = (response = {}, keys = []) => {
@@ -217,18 +293,6 @@ const getProviderShipmentId = (response = {}) => {
   return getShiprocketValue(response, ['shipment_id', 'shipmentId']);
 };
 
-const getAwbCode = (...responses) => {
-  for (const response of responses) {
-    const awbCode = getShiprocketValue(response, ['awb_code', 'awbCode']);
-
-    if (awbCode) {
-      return awbCode;
-    }
-  }
-
-  return '';
-};
-
 const getCourierName = (...responses) => {
   for (const response of responses) {
     const courierName = getShiprocketValue(response, ['courier_name', 'courierName']);
@@ -253,29 +317,20 @@ const getTrackingUrl = (...responses) => {
   return '';
 };
 
-const buildShipmentIdArray = (shipmentId, response = null) => {
-  const normalizedShipmentId = normalizeShiprocketRequestId(shipmentId);
-
-  if (!normalizedShipmentId) {
-    throw new ApiError(
-      502,
-      getShiprocketErrorMessage(response) || 'Shiprocket did not return a shipment id',
-      {
-        providerResponse: response,
-        shipmentId,
-      },
-    );
-  }
-
-  return [normalizedShipmentId];
-};
-
-const buildShiprocketTrackingUrl = (trackingKey = '') => {
-  if (!trackingKey) {
+const buildShiprocketAwbTrackingUrl = (awbCode = '') => {
+  if (!awbCode) {
     return '';
   }
 
-  return `${shiprocketConfig.baseUrl.replace(/\/$/, '')}/courier/track/awb/${encodeURIComponent(trackingKey)}`;
+  return `${shiprocketConfig.baseUrl.replace(/\/$/, '')}/courier/track/awb/${encodeURIComponent(awbCode)}`;
+};
+
+const buildShiprocketShipmentTrackingUrl = (shipmentId = '') => {
+  if (!shipmentId) {
+    return '';
+  }
+
+  return `${shiprocketConfig.baseUrl.replace(/\/$/, '')}/courier/track/shipment/${encodeURIComponent(shipmentId)}`;
 };
 
 const parseShiprocketDateValue = (value) => {
@@ -390,17 +445,25 @@ const extractShiprocketTrackingSnapshot = (response = {}) => {
     .map((scan) => formatShiprocketTrackingEvent(scan, providerStatus))
     .filter((event) => event.status && event.message);
   const awbCode = getShiprocketValue(response, ['awb', 'awb_code', 'awbCode']);
-  const trackingKey = awbCode || getProviderShipmentId(response);
+  const resolvedProviderStatus = providerStatus || events[0]?.providerStatus || '';
 
   return {
     awbCode,
+    courierCompanyId: getShiprocketValue(response, ['courier_company_id', 'courierCompanyId', 'courier_id', 'courierId']),
     courierName: getCourierName(response),
+    estimatedDeliveryDays: getShiprocketValue(response, ['etd', 'estimated_delivery_days', 'estimatedDeliveryDays']),
     events,
+    invoiceUrl: getShiprocketResponseData(response).invoice_url || '',
+    labelUrl: getShiprocketResponseData(response).label_url || '',
+    manifestUrl: getShiprocketResponseData(response).manifest_url || '',
     pickupScheduledAt: getShiprocketValue(response, ['pickup_scheduled_date']) || '',
-    providerStatus: providerStatus || (events[0]?.providerStatus || ''),
+    pickupTokenNumber: getShiprocketValue(response, ['pickup_token_number']) || '',
+    providerOrderId: getProviderOrderId(response),
+    providerShipmentId: getProviderShipmentId(response),
+    providerStatus: resolvedProviderStatus,
     rawProviderResponse: response,
-    status: normalizeProviderStatus(providerStatus || events[0]?.providerStatus || ''),
-    trackingUrl: getTrackingUrl(response) || buildShiprocketTrackingUrl(trackingKey),
+    status: resolvedProviderStatus ? normalizeProviderStatus(resolvedProviderStatus) : '',
+    trackingUrl: getTrackingUrl(response) || buildShiprocketAwbTrackingUrl(awbCode),
   };
 };
 
@@ -422,79 +485,6 @@ const getShiprocketErrorMessage = (...responses) => {
   return '';
 };
 
-const formatShiprocketPickupLocation = (location = {}) => ({
-  addressLine1: location.address || location.address_2 || '',
-  addressLine2: location.address_2 || '',
-  city: location.city || '',
-  country: location.country || 'India',
-  email: location.email || '',
-  id: hasMeaningfulValue(location.id) ? location.id.toString() : '',
-  isActive: String(location.status || '') !== '0',
-  name: location.seller_name || location.pickup_location || '',
-  phone: location.phone || '',
-  pickupLocation: location.pickup_location || location.seller_name || '',
-  pincode: location.pin_code || location.pincode || '',
-  state: location.state || '',
-  warehouseCode: location.warehouse_code || '',
-});
-
-const looksLikeShiprocketPickupLocation = (value = {}) => (
-  value &&
-  typeof value === 'object' &&
-  (
-    hasMeaningfulValue(value.pickup_location) ||
-    hasMeaningfulValue(value.seller_name)
-  ) &&
-  (
-    hasMeaningfulValue(value.pin_code) ||
-    hasMeaningfulValue(value.pincode) ||
-    hasMeaningfulValue(value.city)
-  )
-);
-
-const findShiprocketPickupLocationCollection = (value, visited = new Set()) => {
-  if (!value || typeof value !== 'object') {
-    return [];
-  }
-
-  if (visited.has(value)) {
-    return [];
-  }
-
-  visited.add(value);
-
-  if (Array.isArray(value)) {
-    if (value.some(looksLikeShiprocketPickupLocation)) {
-      return value;
-    }
-
-    for (const item of value) {
-      const nestedCollection = findShiprocketPickupLocationCollection(item, visited);
-
-      if (nestedCollection.length > 0) {
-        return nestedCollection;
-      }
-    }
-
-    return [];
-  }
-
-  for (const nestedValue of Object.values(value)) {
-    const nestedCollection = findShiprocketPickupLocationCollection(nestedValue, visited);
-
-    if (nestedCollection.length > 0) {
-      return nestedCollection;
-    }
-  }
-
-  return [];
-};
-
-const shouldRetryShipmentLookup = (error) => (
-  error?.statusCode === 404 &&
-  String(error?.message || '').toLowerCase().includes('shipment not found')
-);
-
 const buildOrderItems = (items = []) => items.map((item) => ({
   discount: 0,
   name: item.productSnapshot?.name || item.productId?.toString() || 'Product',
@@ -503,7 +493,7 @@ const buildOrderItems = (items = []) => items.map((item) => ({
   units: Number(item.quantity || 1),
 }));
 
-const buildCreatePayload = ({ items, order, payload, user }) => {
+const buildCreatePayload = ({ items, order, payload, pickupLocation, user }) => {
   const address = order.shippingAddress || {};
   const packageDetails = buildPackage(payload);
 
@@ -527,7 +517,7 @@ const buildCreatePayload = ({ items, order, payload, user }) => {
     order_id: order.orderNumber,
     order_items: buildOrderItems(items),
     payment_method: order.paymentMethod === 'cod' ? 'COD' : 'Prepaid',
-    pickup_location: payload.pickupLocation || shiprocketConfig.pickupLocation,
+    pickup_location: pickupLocation,
     shipping_is_billing: true,
     sub_total: Number(order.subtotal || order.totalPayable || 0),
     total_discount: Number(order.bagDiscount || 0) + Number(order.couponDiscount || 0),
@@ -535,172 +525,9 @@ const buildCreatePayload = ({ items, order, payload, user }) => {
   };
 };
 
-const buildCourierOptionsQuery = ({ order, payload }) => {
-  const address = order.shippingAddress || {};
-  const packageDetails = buildPackage(payload);
-  const pickupPincode = payload.pickupAddress?.pincode || payload.pickupPincode || '';
-  const providerOrderId = normalizeShiprocketRequestId(payload.providerOrderId || payload.order_id || payload.orderId);
-  const query = new URLSearchParams({
-    breadth: String(packageDetails.breadth),
-    cod: order.paymentMethod === 'cod' ? '1' : '0',
-    declared_value: String(Number(order.totalPayable || order.subtotal || 0)),
-    delivery_postcode: address.pincode || '',
-    height: String(packageDetails.height),
-    length: String(packageDetails.length),
-    pickup_postcode: pickupPincode,
-    weight: String(packageDetails.weight),
-  });
-
-  if (providerOrderId) {
-    query.set('order_id', providerOrderId);
-  }
-
-  return query;
-};
-
-const formatCourierOption = (courier = {}) => {
-  const courierCompanyId = courier.courier_company_id || courier.courierCompanyId || courier.id || courier.courier_id;
-  const courierName = courier.courier_name || courier.courierName || courier.name || '';
-
-  if (!courierCompanyId || !courierName) {
-    return null;
-  }
-
-  return {
-    blocked: Boolean(courier.blocked),
-    charge: courier.rate ?? courier.freight_charge ?? courier.shipping_charge ?? null,
-    courierCompanyId: courierCompanyId.toString(),
-    courierName,
-    estimatedDeliveryDays: courier.etd || courier.estimated_delivery_days || '',
-    rating: courier.rating ?? null,
-    rawProviderResponse: courier,
-  };
-};
-
-const getCourierOptions = async ({ order, payload = {} }) => {
-  const pickupPincode = payload.pickupAddress?.pincode || payload.pickupPincode || '';
-
-  assertShippingProviderConfigured(pickupPincode, SHIPPING_PROVIDER.SHIPROCKET);
-
-  const query = buildCourierOptionsQuery({ order, payload });
-  const providerResponse = await getJson(
-    buildShiprocketUrl(`/courier/serviceability/?${query.toString()}`),
-    {
-      headers: await getAuthHeaders(),
-    },
-  );
-  const options = providerResponse.data?.available_courier_companies ||
-    providerResponse.available_courier_companies ||
-    providerResponse.data?.courier_data ||
-    providerResponse.courier_data ||
-    providerResponse.courier_companies ||
-    [];
-
-  return {
-    couriers: options.map(formatCourierOption).filter(Boolean),
-    rawProviderResponse: providerResponse,
-  };
-};
-
-const listPickupLocations = async () => {
-  const providerResponse = await getJson(
-    buildShiprocketUrl('/settings/company/pickup'),
-    {
-      headers: await getAuthHeaders(),
-    },
-  );
-  const pickupLocations = providerResponse.data?.data ||
-    providerResponse.data?.pickup_locations ||
-    providerResponse.pickup_locations ||
-    providerResponse.data?.shipping_address ||
-    providerResponse.shipping_address ||
-    providerResponse.data?.addresses ||
-    providerResponse.addresses ||
-    findShiprocketPickupLocationCollection(providerResponse);
-
-  return {
-    items: Array.isArray(pickupLocations)
-      ? pickupLocations.map(formatShiprocketPickupLocation).filter((location) => location.id && location.pickupLocation)
-      : [],
-    rawProviderResponse: providerResponse,
-  };
-};
-
-const assignAwb = async ({ courierCompanyId, providerResponse = null, shipmentId }) => {
-  if (!shipmentId) {
-    throw new ApiError(
-      502,
-      getShiprocketErrorMessage(providerResponse) || 'Shiprocket did not return a shipment id for AWB assignment',
-      {
-      providerResponse,
-      },
-    );
-  }
-
-  const normalizedCourierId = normalizeShiprocketRequestId(courierCompanyId);
-  const normalizedShipmentId = normalizeShiprocketRequestId(shipmentId);
-  const requestBody = {
-    courier_id: normalizedCourierId,
-    shipment_id: normalizedShipmentId,
-  };
-  const retryDelaysMs = [0, 800, 1500];
-  let lastError = null;
-
-  for (let attempt = 0; attempt < retryDelaysMs.length; attempt += 1) {
-    const retryDelayMs = retryDelaysMs[attempt];
-
-    if (retryDelayMs > 0) {
-      await sleep(retryDelayMs);
-    }
-
-    try {
-      return await postJson(
-        buildShiprocketUrl('/courier/assign/awb'),
-        requestBody,
-        {
-          headers: await getAuthHeaders(),
-        },
-      );
-    } catch (error) {
-      lastError = error;
-
-      if (!shouldRetryShipmentLookup(error) || attempt === retryDelaysMs.length - 1) {
-        break;
-      }
-    }
-  }
-
-  if (lastError) {
-    throw new ApiError(
-      lastError.statusCode || 502,
-      lastError.message || 'Shiprocket AWB assignment failed',
-      {
-        courierCompanyId: normalizedCourierId,
-        providerResponse,
-        requestBody,
-        shipmentId: normalizedShipmentId,
-        shiprocketError: lastError.details || null,
-      },
-    );
-  }
-
-  throw new ApiError(502, 'Shiprocket AWB assignment failed', {
-    courierCompanyId: normalizedCourierId,
-    providerResponse,
-    requestBody,
-    shipmentId: normalizedShipmentId,
-  });
-};
-
-const createShipment = async ({ items, order, payload = {}, user }) => createProviderOrder({
-  items,
-  order,
-  payload,
-  user,
-});
-
 const createProviderOrder = async ({ items, order, payload = {}, user }) => {
-  const createPayload = buildCreatePayload({ items, order, payload, user });
+  const pickupLocation = await resolvePickupLocation(payload);
+  const createPayload = buildCreatePayload({ items, order, payload, pickupLocation, user });
 
   assertShippingProviderConfigured(createPayload.pickup_location, SHIPPING_PROVIDER.SHIPROCKET);
 
@@ -744,211 +571,52 @@ const createProviderOrder = async ({ items, order, payload = {}, user }) => {
   };
 };
 
-const assignAwbToShipment = async ({ payload = {}, shipment }) => {
-  const courierCompanyId = payload.courierCompanyId || payload.courier_id || payload.courierId || '';
+const trackShipment = async ({ payload = {}, shipment }) => {
+  const awbCode = normalizeShiprocketRequestId(payload.awbCode || shipment.awbCode);
+  const shipmentId = normalizeShiprocketRequestId(payload.providerShipmentId || shipment.providerShipmentId);
+  const trackingUrls = [
+    awbCode ? buildShiprocketAwbTrackingUrl(awbCode) : '',
+    shipmentId ? buildShiprocketShipmentTrackingUrl(shipmentId) : '',
+  ].filter(Boolean);
 
-  if (!courierCompanyId) {
-    throw new ApiError(400, 'Select a Shiprocket courier before creating AWB');
-  }
-
-  const awbResponse = await assignAwb({
-    courierCompanyId,
-    providerResponse: shipment?.rawProviderResponse || null,
-    shipmentId: shipment?.providerShipmentId,
-  });
-  const providerStatus = awbResponse.status ||
-    awbResponse.shipment_status ||
-    shipment?.providerStatus ||
-    'awb_assigned';
-  const awbCode = getAwbCode(awbResponse, shipment?.rawProviderResponse);
-
-  if (!awbCode) {
-    throw new ApiError(
-      502,
-      getShiprocketErrorMessage(awbResponse, shipment?.rawProviderResponse) ||
-        'Shiprocket did not return an AWB for the selected courier',
-      {
-        awbResponse,
-        providerResponse: shipment?.rawProviderResponse || null,
-      },
-    );
-  }
-
-  return {
-    awbCode,
-    courierCharge: payload.courierCharge ?? payload.charge ?? null,
-    courierCompanyId: courierCompanyId.toString(),
-    courierName: getCourierName(awbResponse, shipment?.rawProviderResponse) || payload.courierName || '',
-    estimatedDeliveryDays: payload.estimatedDeliveryDays || '',
-    invoiceUrl: getShiprocketResponseData(awbResponse).invoice_url || '',
-    labelUrl: getShiprocketResponseData(awbResponse).label_url || '',
-    providerStatus: providerStatus || 'awb_assigned',
-    rawProviderResponse: awbResponse,
-    status: normalizeProviderStatus(providerStatus || 'awb_assigned'),
-    trackingUrl: getTrackingUrl(awbResponse, shipment?.rawProviderResponse),
-  };
-};
-
-const schedulePickupForShipment = async ({ payload = {}, shipment }) => {
-  const shipmentId = normalizeShiprocketRequestId(shipment?.providerShipmentId);
-
-  if (!shipmentId) {
-    throw new ApiError(400, 'Shiprocket shipment id is required before scheduling pickup');
-  }
-
-  const requestBody = {
-    shipment_id: buildShipmentIdArray(shipmentId, shipment?.rawProviderResponse),
-  };
-
-  if (payload.status) {
-    requestBody.status = payload.status;
-  }
-
-  const providerResponse = await postJson(
-    buildShiprocketUrl('/courier/generate/pickup'),
-    requestBody,
-    {
-      headers: await getAuthHeaders(),
-    },
-  );
-
-  const providerStatus = providerResponse.status ||
-    providerResponse.shipment_status ||
-    (providerResponse.pickup_generated ? 'pickup_scheduled' : 'pickup_pending');
-
-  return {
-    labelUrl: getShiprocketResponseData(providerResponse).label_url || shipment?.labelUrl || '',
-    manifestUrl: getShiprocketResponseData(providerResponse).manifest_url || '',
-    pickupScheduledAt: getShiprocketValue(providerResponse, ['pickup_scheduled_date']) || '',
-    pickupTokenNumber: getShiprocketValue(providerResponse, ['pickup_token_number']) || '',
-    providerStatus,
-    rawProviderResponse: providerResponse,
-    status: normalizeProviderStatus(providerStatus || 'pickup_scheduled'),
-  };
-};
-
-const generateLabelForShipment = async ({ shipment }) => {
-  const providerResponse = await postJson(
-    buildShiprocketUrl('/courier/generate/label'),
-    {
-      shipment_id: buildShipmentIdArray(shipment?.providerShipmentId, shipment?.rawProviderResponse),
-    },
-    {
-      headers: await getAuthHeaders(),
-    },
-  );
-  const labelUrl = getShiprocketResponseData(providerResponse).label_url || '';
-
-  if (!labelUrl) {
-    throw new ApiError(
-      502,
-      getShiprocketErrorMessage(providerResponse) || 'Shiprocket did not return a label URL',
-      {
-        providerResponse,
-        shipmentId: shipment?.providerShipmentId || '',
-      },
-    );
-  }
-
-  return {
-    labelUrl,
-    providerStatus: shipment?.providerStatus || 'label_created',
-    rawProviderResponse: providerResponse,
-    status: SHIPMENT_STATUS.LABEL_CREATED,
-  };
-};
-
-const generateManifestForShipment = async ({ shipment }) => {
-  const providerResponse = await postJson(
-    buildShiprocketUrl('/manifests/generate'),
-    {
-      shipment_id: buildShipmentIdArray(shipment?.providerShipmentId, shipment?.rawProviderResponse),
-    },
-    {
-      headers: await getAuthHeaders(),
-    },
-  );
-  const manifestUrl = getShiprocketResponseData(providerResponse).manifest_url || '';
-
-  if (!manifestUrl) {
-    throw new ApiError(
-      502,
-      getShiprocketErrorMessage(providerResponse) || 'Shiprocket did not return a manifest URL',
-      {
-        providerResponse,
-        shipmentId: shipment?.providerShipmentId || '',
-      },
-    );
-  }
-
-  return {
-    manifestUrl,
-    providerStatus: shipment?.providerStatus || 'manifest_generated',
-    rawProviderResponse: providerResponse,
-    status: shipment?.status || SHIPMENT_STATUS.PICKUP_SCHEDULED,
-  };
-};
-
-const cancelShipment = async ({ shipment }) => {
-  if (!shipment?.providerOrderId) {
-    throw new ApiError(400, 'Shiprocket order id is required to cancel this shipment');
-  }
-
-  const providerResponse = await postJson(
-    `${shiprocketConfig.baseUrl.replace(/\/$/, '')}/orders/cancel`,
-    {
-      ids: [shipment.providerOrderId],
-    },
-    {
-      headers: await getAuthHeaders(),
-    },
-  );
-
-  return {
-    providerStatus: providerResponse.status || 'cancelled',
-    rawProviderResponse: providerResponse,
-    status: SHIPMENT_STATUS.CANCELLED,
-  };
-};
-
-const trackShipment = async ({ shipment }) => {
-  const trackingKey = shipment.awbCode || shipment.providerShipmentId;
-
-  if (!trackingKey) {
+  if (!trackingUrls.length) {
     throw new ApiError(400, 'AWB or provider shipment id is required to track this shipment');
   }
 
-  const providerResponse = await getJson(
-    buildShiprocketTrackingUrl(trackingKey),
-    {
-      headers: await getAuthHeaders(),
-    },
-  );
+  let lastError = null;
 
-  return extractShiprocketTrackingSnapshot(providerResponse);
+  for (const trackingUrl of trackingUrls) {
+    try {
+      const providerResponse = await getJson(
+        trackingUrl,
+        {
+          headers: await getAuthHeaders(),
+        },
+      );
+
+      return extractShiprocketTrackingSnapshot(providerResponse);
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  throw lastError;
 };
 
 const testConnection = async () => {
   const token = await getAuthToken();
+  const pickupLocation = await resolvePickupLocation();
 
   return {
     authenticated: Boolean(token),
-    pickupLocation: shiprocketConfig.pickupLocation || '',
+    pickupLocation,
   };
 };
 
 export default {
-  assignAwbToShipment,
-  cancelShipment,
   createProviderOrder,
-  createShipment,
   extractTrackingSnapshot: extractShiprocketTrackingSnapshot,
-  generateLabelForShipment,
-  generateManifestForShipment,
-  getCourierOptions,
-  listPickupLocations,
   name: SHIPPING_PROVIDER.SHIPROCKET,
-  schedulePickupForShipment,
   testConnection,
   trackShipment,
 };
