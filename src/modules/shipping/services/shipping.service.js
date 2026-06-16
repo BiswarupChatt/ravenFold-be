@@ -144,6 +144,14 @@ const shipmentStatusesForShippedOrder = new Set([
   SHIPMENT_STATUS.PICKED_UP,
 ]);
 
+const inactiveShipmentStatuses = [
+  SHIPMENT_STATUS.CANCELLED,
+  SHIPMENT_STATUS.LOST,
+  SHIPMENT_STATUS.RTO,
+];
+
+const providerOrderCreationLocks = new Set();
+
 const assertOrderCanBeFulfilled = (order) => {
   if (terminalOrderStatuses.has(order.status)) {
     throw new ApiError(400, `Order ${order.status} cannot be fulfilled`);
@@ -212,6 +220,10 @@ const updateOrderStatus = async ({ actorId, nextStatus, note, order }) => {
 };
 
 const getOrderStatusFromShipmentStatus = (shipmentStatus, currentOrderStatus) => {
+  if (terminalOrderStatuses.has(currentOrderStatus)) {
+    return currentOrderStatus;
+  }
+
   if (shipmentStatus === SHIPMENT_STATUS.DELIVERED) {
     return ORDER_STATUS.DELIVERED;
   }
@@ -242,6 +254,7 @@ const createShipmentEvent = async ({
   location = '',
   message = '',
   providerEventId = '',
+  providerStatus = '',
   rawEvent = null,
   shipment,
   status,
@@ -266,7 +279,7 @@ const createShipmentEvent = async ({
     orderId: shipment.orderId,
     provider: shipment.provider,
     providerEventId,
-    providerStatus: shipment.providerStatus || '',
+    providerStatus: normalizeText(providerStatus) || shipment.providerStatus || '',
     rawEvent,
     shipmentId: shipment._id,
     status,
@@ -334,6 +347,7 @@ const persistTrackingEvents = async ({ events = [], shipment }) => {
       location: event.location,
       message: event.message,
       providerEventId: event.providerEventId,
+      providerStatus: event.providerStatus,
       rawEvent: event.rawEvent,
       shipment,
       status: event.status,
@@ -480,6 +494,7 @@ const createProviderOrderForOrder = async (actor, orderId, payload = {}) => {
   const providerName = normalizeShippingProvider(payload.provider);
   const provider = getShippingProvider(providerName);
   const order = await getOrderForFulfillment(orderId);
+  const lockKey = `${providerName}:${order._id.toString()}`;
 
   assertOrderCanBeFulfilled(order);
 
@@ -491,44 +506,70 @@ const createProviderOrderForOrder = async (actor, orderId, payload = {}) => {
     throw new ApiError(400, `${providerName} does not support creating a provider order separately`);
   }
 
-  const {
-    items,
-    resolvedPayload,
-    user,
-  } = await resolveShipmentContext({ order, payload });
-  const providerResult = await provider.createProviderOrder({
-    items,
-    order,
-    payload: resolvedPayload,
-    user,
-  });
-  const shipment = await Shipment.create(buildShipmentPayload({
-    order,
-    payload: resolvedPayload,
-    providerResult: {
-      ...providerResult,
-      provider: providerName,
-      rawProviderResponse: {
-        createProviderOrder: providerResult.rawProviderResponse,
+  if (providerOrderCreationLocks.has(lockKey)) {
+    throw new ApiError(409, 'Shipment creation is already in progress for this order');
+  }
+
+  providerOrderCreationLocks.add(lockKey);
+
+  try {
+    const existingShipment = await Shipment.findOne({
+      orderId: order._id,
+      status: { $nin: inactiveShipmentStatuses },
+    })
+      .sort({ createdAt: -1 })
+      .lean()
+      .exec();
+
+    if (existingShipment) {
+      throw new ApiError(
+        409,
+        'An active shipment already exists for this order',
+        { shipment: formatShipment(existingShipment) },
+      );
+    }
+
+    const {
+      items,
+      resolvedPayload,
+      user,
+    } = await resolveShipmentContext({ order, payload });
+    const providerResult = await provider.createProviderOrder({
+      items,
+      order,
+      payload: resolvedPayload,
+      user,
+    });
+    const shipment = await Shipment.create(buildShipmentPayload({
+      order,
+      payload: resolvedPayload,
+      providerResult: {
+        ...providerResult,
+        provider: providerName,
+        rawProviderResponse: {
+          createProviderOrder: providerResult.rawProviderResponse,
+        },
       },
-    },
-  }));
+    }));
 
-  await createShipmentEvent({
-    message: normalizeText(payload.note) || `${providerName} order created`,
-    rawEvent: providerResult.rawProviderResponse,
-    shipment,
-    status: shipment.status,
-  });
+    await createShipmentEvent({
+      message: normalizeText(payload.note) || `${providerName} order created`,
+      rawEvent: providerResult.rawProviderResponse,
+      shipment,
+      status: shipment.status,
+    });
 
-  await updateOrderStatus({
-    actorId,
-    nextStatus: getOrderStatusFromShipmentStatus(shipment.status, order.status),
-    note: `Provider order ${shipment.providerOrderId || shipment._id.toString()} created via ${providerName}`,
-    order,
-  });
+    await updateOrderStatus({
+      actorId,
+      nextStatus: getOrderStatusFromShipmentStatus(shipment.status, order.status),
+      note: `Provider order ${shipment.providerOrderId || shipment._id.toString()} created via ${providerName}`,
+      order,
+    });
 
-  return formatShipment(shipment.toObject());
+    return formatShipment(shipment.toObject());
+  } finally {
+    providerOrderCreationLocks.delete(lockKey);
+  }
 };
 
 const getShipmentForAdmin = async (shipmentId) => {
@@ -551,8 +592,6 @@ const syncShipmentTracking = async (actor, shipmentId, payload = {}) => {
   const now = new Date();
   const previousStatus = shipment.status;
   const previousProviderStatus = shipment.providerStatus;
-
-  assertOrderCanBeFulfilled(order);
 
   if (!provider.trackShipment) {
     throw new ApiError(400, `${shipment.provider} does not support tracking sync`);
@@ -659,12 +698,14 @@ const handleShiprocketWebhook = async (req) => {
 
   const webhookSecret = shiprocketConfig.webhookSecret || '';
 
-  if (webhookSecret) {
-    const signature = req.get('x-api-key') || '';
+  if (!webhookSecret) {
+    throw new ApiError(503, 'Shiprocket webhook secret is not configured');
+  }
 
-    if (!signature || !secureTextEqual(signature, webhookSecret)) {
-      throw new ApiError(400, 'Invalid Shiprocket webhook signature');
-    }
+  const signature = req.get('x-api-key') || '';
+
+  if (!signature || !secureTextEqual(signature, webhookSecret)) {
+    throw new ApiError(400, 'Invalid Shiprocket webhook signature');
   }
 
   const payload = req.body || {};

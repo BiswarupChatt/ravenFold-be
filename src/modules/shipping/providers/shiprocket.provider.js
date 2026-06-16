@@ -473,7 +473,7 @@ const extractShiprocketTrackingSnapshot = (response = {}) => {
     providerStatus: resolvedProviderStatus,
     rawProviderResponse: response,
     status: resolvedProviderStatus ? normalizeProviderStatus(resolvedProviderStatus) : '',
-    trackingUrl: getTrackingUrl(response) || buildShiprocketAwbTrackingUrl(awbCode),
+    trackingUrl: getTrackingUrl(response),
   };
 };
 
