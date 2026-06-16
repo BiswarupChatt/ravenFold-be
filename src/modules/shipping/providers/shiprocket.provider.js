@@ -108,6 +108,14 @@ const hasMeaningfulValue = (value) => {
 
 const normalizeText = (value = '') => String(value || '').trim();
 
+const normalizeProviderValue = (value = '') => {
+  const normalizedValue = normalizeText(value);
+
+  return ['', '0', 'null', 'undefined', 'nan'].includes(normalizedValue.toLowerCase())
+    ? ''
+    : normalizedValue;
+};
+
 const findNestedValueByKeys = (value, keys = [], visited = new Set()) => {
   if (!hasMeaningfulValue(value)) {
     return '';
@@ -255,7 +263,7 @@ const getShiprocketRawValue = (response = {}, keys = []) => {
 const getShiprocketValue = (response = {}, keys = []) => {
   const rawValue = getShiprocketRawValue(response, keys);
 
-  return hasMeaningfulValue(rawValue) ? rawValue.toString() : '';
+  return hasMeaningfulValue(rawValue) ? normalizeProviderValue(rawValue) : '';
 };
 
 const normalizeShiprocketRequestId = (value) => {
@@ -264,13 +272,15 @@ const normalizeShiprocketRequestId = (value) => {
   }
 
   if (typeof value === 'number') {
-    return value;
+    return value > 0 ? value : '';
   }
 
   const normalizedValue = String(value).trim();
 
   if (/^\d+$/.test(normalizedValue)) {
-    return Number(normalizedValue);
+    const numericValue = Number(normalizedValue);
+
+    return numericValue > 0 ? numericValue : '';
   }
 
   return normalizedValue;
@@ -284,7 +294,7 @@ const getProviderOrderId = (response = {}) => {
   }
 
   const data = getShiprocketResponseData(response);
-  const fallbackOrderId = data?.id || response.id || '';
+  const fallbackOrderId = normalizeProviderValue(data?.id || response.id || '');
 
   return hasMeaningfulValue(fallbackOrderId) ? fallbackOrderId.toString() : '';
 };
