@@ -234,7 +234,7 @@ Current behavior:
 
 Review link format:
 
-- `${FRONTEND_URL}/profile/reviews?orderId={orderId}&orderItemId={orderItemId}`
+- `${FRONTEND_URL}/profile/reviews/write/{orderId}/{orderItemId}`
 
 ## Frontend Integration
 

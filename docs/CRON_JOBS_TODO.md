@@ -17,6 +17,9 @@ This project already has webhook and manual-sync paths for some flows. The jobs 
 ## Implemented Job: Review Reminder Email
 
 - Status: implemented
+- Reminder intent:
+  - After an order item is delivered, send a review reminder email after the stipulated delay configured by `REVIEW_REMINDER_DELAY_DAYS`.
+  - The reminder email CTA should open a dedicated review page for that specific order item instead of a modal-based review flow.
 - Relevant code:
   - `src/background-jobs.js`
   - `src/modules/review/services/review-reminder.job.js`

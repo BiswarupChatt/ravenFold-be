@@ -29,7 +29,7 @@ const buildReminderReviewUrl = ({ orderId, orderItemId }) => {
     return '';
   }
 
-  return `${baseUrl}/profile/reviews?orderId=${orderId}&orderItemId=${orderItemId}`;
+  return `${baseUrl}/profile/reviews/write/${orderId}/${orderItemId}`;
 };
 
 const scheduleReviewRemindersForDeliveredOrder = async (orderIdValue, deliveredAtValue = new Date()) => {
