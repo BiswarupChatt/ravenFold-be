@@ -47,6 +47,12 @@ const normalizeProvider = (providerName = '') => {
   return normalizedProvider;
 };
 
+const assertStorefrontCheckoutSupport = (providerName) => {
+  if (providerName === PAYMENT_PROVIDER.JUSPAY) {
+    throw new ApiError(503, 'Juspay checkout is not enabled in the storefront yet');
+  }
+};
+
 const formatPaymentAttempt = (attempt) => ({
   amount: attempt.amount,
   createdAt: attempt.createdAt,
@@ -405,6 +411,7 @@ const getPayableOrder = async (actor, orderId) => {
 const createPaymentSession = async (actor, payload = {}) => {
   assertDatabaseReady();
   const providerName = normalizeProvider(payload.provider);
+  assertStorefrontCheckoutSupport(providerName);
   const provider = getPaymentProvider(providerName);
   const { order, userId } = await getPayableOrder(actor, payload.orderId);
   const user = await getUser(userId);
@@ -694,6 +701,7 @@ const processWebhook = async (payload) => ({
 });
 
 export {
+  assertStorefrontCheckoutSupport,
   createPaymentSession,
   getStatusData,
   handleProviderWebhook,
@@ -705,6 +713,7 @@ export {
 };
 
 export default {
+  assertStorefrontCheckoutSupport,
   createPaymentSession,
   getStatusData,
   handleProviderWebhook,

@@ -224,10 +224,7 @@ const loginAdminUser = async (payload) => {
 };
 
 const verifyOtpPayload = async (payload) => {
-  return {
-    received: Boolean(payload),
-    verified: false,
-  };
+  throw new ApiError(501, 'OTP verification is not enabled in this backend');
 };
 
 const getGoogleAuthToken = (payload) => {
@@ -304,7 +301,7 @@ const loginAdmin = async (req, res) => {
 };
 
 const verifyOtp = async (req, res) => {
-  return sendSuccess(res, await verifyOtpPayload(req.body), 'OTP verification flow not implemented yet');
+  return sendSuccess(res, await verifyOtpPayload(req.body), 'OTP verification unavailable');
 };
 
 const googleAuth = async (req, res) => {

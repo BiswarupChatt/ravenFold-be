@@ -3,7 +3,12 @@ import express from 'express';
 import asyncHandler from '@/common/helpers/asyncHandler.helper.js';
 import adminMiddleware from '@/common/middleware/admin.middleware.js';
 import { authenticateUser } from '@/common/middleware/auth.middleware.js';
+import validate from '@/common/middleware/validate.middleware.js';
 import cartController from '@/modules/cart/controllers/cart.controller.js';
+import {
+  addCartItemSchema,
+  updateCartItemSchema,
+} from '@/modules/cart/cart.validator.js';
 
 const router = express.Router();
 
@@ -28,11 +33,11 @@ router
   .get(authenticateUser, asyncHandler(cartController.getCart))
   .delete(authenticateUser, asyncHandler(cartController.clearCart));
 
-router.post('/items', authenticateUser, asyncHandler(cartController.addCartItem));
+router.post('/items', authenticateUser, validate(addCartItemSchema), asyncHandler(cartController.addCartItem));
 
 router
   .route('/items/:cartItemId')
-  .patch(authenticateUser, asyncHandler(cartController.updateCartItem))
+  .patch(authenticateUser, validate(updateCartItemSchema), asyncHandler(cartController.updateCartItem))
   .delete(authenticateUser, asyncHandler(cartController.removeCartItem));
 
 export default router;
