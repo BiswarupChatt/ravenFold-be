@@ -371,3 +371,53 @@ test('central evaluator returns a rejected coupon reason when coupon is not foun
   assert.equal(result.rejectedCoupon.code, 'SAVE99');
   assert.equal(result.rejectedCoupon.reason, 'Invalid coupon code');
 });
+
+test('central evaluator returns a conflict reason when a valid coupon loses to a higher priority offer', async () => {
+  const promotions = [
+    buildPromotion({
+      applicableOn: PROMOTION_APPLICABLE_ON.SPECIFIC_PRODUCTS,
+      discountValue: 50,
+      isStackable: false,
+      priority: 50,
+      productIds: ['6870c14d5d3b59cfd5a00211'],
+      title: 'Auto 50%',
+      type: PROMOTION_TYPE.PRODUCT_DISCOUNT,
+    }),
+    buildPromotion({
+      applicableOn: PROMOTION_APPLICABLE_ON.SPECIFIC_PRODUCTS,
+      couponCode: 'WELCOME200',
+      discountMethod: PROMOTION_DISCOUNT_METHOD.FIXED,
+      discountValue: 200,
+      isAutomatic: false,
+      isStackable: false,
+      priority: 10,
+      productIds: ['6870c14d5d3b59cfd5a00211'],
+      title: 'Welcome 200',
+      type: PROMOTION_TYPE.COUPON,
+    }),
+  ];
+  const context = buildContext({
+    couponCode: 'WELCOME200',
+    items: [
+      {
+        categoryId: '6870c14d5d3b59cfd5a00111',
+        lineSubtotal: 1000,
+        productId: '6870c14d5d3b59cfd5a00211',
+        quantity: 1,
+        unitPrice: 1000,
+      },
+    ],
+    subtotal: 1000,
+  });
+
+  const result = await evaluatePromotions({
+    context,
+    promotions,
+    usageSummary: emptyUsageSummary,
+  });
+
+  assert.equal(result.appliedPromotions.length, 1);
+  assert.equal(result.appliedPromotions[0].title, 'Auto 50%');
+  assert.equal(result.rejectedCoupon.code, 'WELCOME200');
+  assert.equal(result.rejectedCoupon.reason, 'Coupon cannot be combined with the offers already applied to this cart');
+});

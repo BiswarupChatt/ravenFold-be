@@ -172,7 +172,10 @@ const evaluatePromotions = async ({
   });
   const evaluatedPromotions = [];
   const matchingCouponPromotions = couponCode
-    ? candidatePromotions.filter((promotion) => promotion.type === PROMOTION_TYPE.COUPON)
+    ? candidatePromotions.filter((promotion) => (
+      promotion.type === PROMOTION_TYPE.COUPON
+      && promotionService.normalizeCouponCode(promotion.couponCode) === couponCode
+    ))
     : [];
   let rejectedCouponReason = couponCode ? 'Invalid coupon code' : '';
 
@@ -219,9 +222,24 @@ const evaluatePromotions = async ({
   const appliedCoupon = couponCode
     ? resolvedPromotions.appliedPromotions.some((promotion) => promotionService.normalizeCouponCode(promotion.couponCode) === couponCode)
     : false;
+  const evaluatedMatchingCoupon = couponCode
+    ? evaluatedPromotions.some(({ promotion }) => (
+      promotion.type === PROMOTION_TYPE.COUPON
+      && promotionService.normalizeCouponCode(promotion.couponCode) === couponCode
+    ))
+    : false;
 
   if (couponCode && matchingCouponPromotions.length === 0) {
     rejectedCouponReason = 'Invalid coupon code';
+  } else if (
+    couponCode
+    && !appliedCoupon
+    && evaluatedMatchingCoupon
+    && (!rejectedCouponReason || rejectedCouponReason === 'Invalid coupon code')
+  ) {
+    rejectedCouponReason = resolvedPromotions.appliedPromotions.length
+      ? 'Coupon cannot be combined with the offers already applied to this cart'
+      : 'Coupon is not applicable to this cart';
   }
 
   return {
