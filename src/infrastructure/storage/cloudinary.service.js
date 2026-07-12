@@ -5,6 +5,7 @@ import {
   cloudinaryApiKey,
   cloudinaryApiSecret,
   cloudinaryCloudName,
+  cloudinaryReviewUploadFolder,
   cloudinaryUploadFolder,
 } from '@/config/env.config.js';
 
@@ -44,14 +45,14 @@ const signCloudinaryParams = (params) => {
     .digest('hex');
 };
 
-const createProductImageUploadSignature = () => {
+const createUploadSignature = (folderValue = '') => {
   assertCloudinaryConfigured();
 
   const params = {
     timestamp: Math.round(Date.now() / 1000),
   };
 
-  const folder = normalizeText(cloudinaryUploadFolder);
+  const folder = normalizeText(folderValue);
 
   if (folder) {
     params.folder = folder;
@@ -65,8 +66,12 @@ const createProductImageUploadSignature = () => {
   };
 };
 
-export { createProductImageUploadSignature };
+const createProductImageUploadSignature = () => createUploadSignature(cloudinaryUploadFolder);
+const createReviewImageUploadSignature = () => createUploadSignature(cloudinaryReviewUploadFolder);
+
+export { createProductImageUploadSignature, createReviewImageUploadSignature };
 
 export default {
   createProductImageUploadSignature,
+  createReviewImageUploadSignature,
 };

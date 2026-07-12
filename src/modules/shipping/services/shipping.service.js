@@ -2,6 +2,7 @@ import { timingSafeEqual as timingSafeEqualBuffers } from 'node:crypto';
 
 import ApiError from '@/common/errors/api.error.js';
 import { sendSuccess } from '@/common/helpers/response.helper.js';
+import logger from '@/common/logger/logger.js';
 import { ORDER_STATUS, PAYMENT_STATUS } from '@/common/constants/order.constant.js';
 import {
   SHIPMENT_STATUS,
@@ -24,6 +25,7 @@ import OrderItem from '@/modules/order/models/order-item.model.js';
 import OrderStatusHistory from '@/modules/order/models/order-status-history.model.js';
 import Order from '@/modules/order/models/order.model.js';
 import boxTypeService from '@/modules/box-type/services/box-type.service.js';
+import reviewReminderService from '@/modules/review/services/review-reminder.service.js';
 import ShipmentEvent from '@/modules/shipping/models/shipment-event.model.js';
 import Shipment from '@/modules/shipping/models/shipment.model.js';
 import { getShippingProvider, listShippingProviders } from '@/modules/shipping/providers/shipping-provider.registry.js';
@@ -194,6 +196,17 @@ const updateOrderStatus = async ({ actorId, nextStatus, note, order }) => {
     note,
     order,
   });
+
+  if (nextStatus === ORDER_STATUS.DELIVERED) {
+    try {
+      await reviewReminderService.scheduleReviewRemindersForDeliveredOrder(order._id, new Date());
+    } catch (error) {
+      logger.error('Failed to schedule review reminders after shipment delivery update', {
+        error: error?.message || error,
+        orderId: getDocumentId(order._id),
+      });
+    }
+  }
 };
 
 const getOrderStatusFromShipmentStatus = (shipmentStatus, currentOrderStatus) => {

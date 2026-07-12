@@ -14,6 +14,24 @@ This project already has webhook and manual-sync paths for some flows. The jobs 
 - Cart abandonment is not automated.
 - Checkout currently creates orders and reserves inventory before payment is fully settled, so stale unpaid orders need a timed cleanup path.
 
+## Implemented Job: Review Reminder Email
+
+- Status: implemented
+- Relevant code:
+  - `src/background-jobs.js`
+  - `src/modules/review/services/review-reminder.job.js`
+  - `src/modules/review/services/review-reminder.service.js`
+  - `src/modules/review/models/review-reminder.model.js`
+  - `src/modules/order/services/order.service.js`
+  - `src/modules/shipping/services/shipping.service.js`
+- Current behavior:
+  - After an order becomes delivered, one reminder is scheduled per eligible order item.
+  - Scheduling is idempotent through a unique `orderItemId` reminder record plus upsert logic.
+  - The worker revalidates delivered state, cancellation/refund state, product existence, customer email, and existing review presence before sending.
+  - Duplicate delivery is prevented through atomic claiming and terminal reminder statuses.
+- Current limitation:
+  - Email dispatch is running in `log` mode until a real outbound provider is connected.
+
 ## Job 1: Shipment Tracking Fallback Sync
 
 - Purpose: keep shipment progress updated even when provider webhooks are delayed, missed, or incomplete.

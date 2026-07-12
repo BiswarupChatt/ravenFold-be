@@ -370,6 +370,15 @@ const formatProduct = (product) => {
     attributes: product.attributes || [],
     options: product.options || [],
     shipping: formatShipping(product.shipping || {}),
+    averageRating: Number(product.averageRating || 0),
+    reviewCount: Number(product.reviewCount || 0),
+    ratingDistribution: product.ratingDistribution || {
+      1: 0,
+      2: 0,
+      3: 0,
+      4: 0,
+      5: 0,
+    },
     createdAt: product.createdAt,
     updatedAt: product.updatedAt,
   };

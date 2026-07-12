@@ -213,6 +213,27 @@ const productSchema = new mongoose.Schema(
       type: shippingSchema,
       default: () => ({}),
     },
+    averageRating: {
+      type: Number,
+      min: 0,
+      max: 5,
+      default: 0,
+    },
+    reviewCount: {
+      type: Number,
+      min: 0,
+      default: 0,
+    },
+    ratingDistribution: {
+      type: Object,
+      default: () => ({
+        1: 0,
+        2: 0,
+        3: 0,
+        4: 0,
+        5: 0,
+      }),
+    },
   },
   {
     collection: 'products',
@@ -250,6 +271,9 @@ productSchema.pre('validate', function validateProductPricing() {
   if (this.salePrice !== null && this.salePrice !== undefined && this.salePrice > this.basePrice) {
     this.invalidate('salePrice', 'salePrice cannot be greater than basePrice');
   }
+
+  this.averageRating = Number(Number(this.averageRating || 0).toFixed(1));
+  this.reviewCount = Number.isInteger(this.reviewCount) && this.reviewCount >= 0 ? this.reviewCount : 0;
 });
 
 const Product = mongoose.models.Product || mongoose.model('Product', productSchema);

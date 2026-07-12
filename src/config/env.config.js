@@ -26,8 +26,15 @@ export const cloudinaryCloudName = process.env.CLOUDINARY_CLOUD_NAME || '';
 export const cloudinaryApiKey = process.env.CLOUDINARY_API_KEY || '';
 export const cloudinaryApiSecret = process.env.CLOUDINARY_API_SECRET || '';
 export const cloudinaryUploadFolder = process.env.CLOUDINARY_UPLOAD_FOLDER || 'ravenfold/products';
+export const cloudinaryReviewUploadFolder = process.env.CLOUDINARY_REVIEW_UPLOAD_FOLDER || 'ravenfold/reviews';
 export const paymentDefaultProvider = process.env.PAYMENT_DEFAULT_PROVIDER || 'razorpay';
 export const promotionNewUserEligibilityDays = Number(process.env.PROMOTION_NEW_USER_ELIGIBILITY_DAYS) || 30;
+export const enableReviewReminderJobs = String(process.env.ENABLE_REVIEW_REMINDER_JOBS || 'false').trim().toLowerCase() === 'true';
+export const reviewReminderDelayDays = Number(process.env.REVIEW_REMINDER_DELAY_DAYS) || 3;
+export const reviewReminderJobIntervalMs = Number(process.env.REVIEW_REMINDER_JOB_INTERVAL_MS) || 3600000;
+export const reviewReminderMaxAttempts = Number(process.env.REVIEW_REMINDER_MAX_ATTEMPTS) || 3;
+export const reviewReminderBatchSize = Number(process.env.REVIEW_REMINDER_BATCH_SIZE) || 25;
+export const reviewReminderEmailMode = process.env.REVIEW_REMINDER_EMAIL_MODE || 'log';
 export const shippingDefaultProvider = process.env.SHIPPING_DEFAULT_PROVIDER || 'manual';
 export const shiprocketEmail = process.env.SHIPROCKET_EMAIL || '';
 export const shiprocketPassword = process.env.SHIPROCKET_PASSWORD || '';
@@ -48,7 +55,9 @@ export default {
   cloudinaryApiKey,
   cloudinaryApiSecret,
   cloudinaryCloudName,
+  cloudinaryReviewUploadFolder,
   cloudinaryUploadFolder,
+  enableReviewReminderJobs,
   facebookAppId,
   facebookAppSecret,
   facebookGraphVersion,
@@ -68,6 +77,11 @@ export default {
   port,
   promotionNewUserEligibilityDays,
   redisUrl,
+  reviewReminderBatchSize,
+  reviewReminderDelayDays,
+  reviewReminderEmailMode,
+  reviewReminderJobIntervalMs,
+  reviewReminderMaxAttempts,
   delhiveryBaseUrl,
   delhiveryPickupLocation,
   delhiveryToken,

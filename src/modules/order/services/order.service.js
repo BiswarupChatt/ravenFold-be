@@ -1,5 +1,6 @@
 import ApiError from '@/common/errors/api.error.js';
 import { sendSuccess } from '@/common/helpers/response.helper.js';
+import logger from '@/common/logger/logger.js';
 import { ORDER_STATUS, PAYMENT_STATUS } from '@/common/constants/order.constant.js';
 import { getPagination } from '@/common/utils/pagination.util.js';
 import {
@@ -26,6 +27,7 @@ import Payment from '@/modules/payment/models/payment.model.js';
 import Refund from '@/modules/payment/models/refund.model.js';
 import { formatPayment, formatRefund } from '@/modules/payment/services/refund.service.js';
 import promotionEngineService from '@/modules/promotion/services/promotion-engine.service.js';
+import reviewReminderService from '@/modules/review/services/review-reminder.service.js';
 import Shipment from '@/modules/shipping/models/shipment.model.js';
 import ShipmentEvent from '@/modules/shipping/models/shipment-event.model.js';
 import { formatShipment, formatShipmentEvent } from '@/modules/shipping/services/shipment-formatters.js';
@@ -946,6 +948,17 @@ const updateAdminOrderStatus = async (actor, orderId, payload = {}) => {
       note: note || `Order status updated to ${nextStatus} by admin`,
       order,
     });
+
+    if (nextStatus === ORDER_STATUS.DELIVERED) {
+      try {
+        await reviewReminderService.scheduleReviewRemindersForDeliveredOrder(order._id, new Date());
+      } catch (error) {
+        logger.error('Failed to schedule review reminders after admin delivery update', {
+          error: error?.message || error,
+          orderId: getDocumentId(order._id),
+        });
+      }
+    }
   }
 
   return {
