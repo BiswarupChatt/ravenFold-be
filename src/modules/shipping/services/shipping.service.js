@@ -18,7 +18,6 @@ import {
   getDocumentId,
   normalizeObjectId,
   normalizeOptionalNumber,
-  normalizeOptionalObjectId,
   normalizeText,
 } from '@/common/utils/service.util.js';
 import OrderItem from '@/modules/order/models/order-item.model.js';
@@ -27,7 +26,6 @@ import Order from '@/modules/order/models/order.model.js';
 import boxTypeService from '@/modules/box-type/services/box-type.service.js';
 import ShipmentEvent from '@/modules/shipping/models/shipment-event.model.js';
 import Shipment from '@/modules/shipping/models/shipment.model.js';
-import pickupLocationService from '@/modules/shipping/services/pickup-location.service.js';
 import { getShippingProvider, listShippingProviders } from '@/modules/shipping/providers/shipping-provider.registry.js';
 import { formatShipment } from '@/modules/shipping/services/shipment-formatters.js';
 
@@ -110,27 +108,6 @@ const secureTextEqual = (left = '', right = '') => {
 
   return timingSafeEqualBuffers(leftBuffer, rightBuffer);
 };
-
-const getShipmentPickupLocation = async (payload = {}) => {
-  const pickupLocationId = normalizeText(payload.pickupLocationId);
-
-  if (!pickupLocationId) {
-    return null;
-  }
-
-  return pickupLocationService.getActivePickupLocation(pickupLocationId);
-};
-
-const buildPickupAddressFromPickupLocation = (location = {}) => normalizePickupAddress({
-  addressLine1: location.addressLine1,
-  addressLine2: location.addressLine2,
-  city: location.city,
-  country: location.country,
-  name: location.name,
-  phone: location.phone,
-  pincode: location.pincode,
-  state: location.state,
-});
 
 const terminalOrderStatuses = new Set([
   ORDER_STATUS.CANCELLED,
@@ -355,36 +332,6 @@ const persistTrackingEvents = async ({ events = [], shipment }) => {
   }
 };
 
-const testShippingProviderConnection = async (providerName = SHIPPING_PROVIDER.SHIPROCKET) => {
-  assertDatabaseReady();
-  const normalizedProviderName = normalizeShippingProvider(providerName);
-  const provider = getShippingProvider(normalizedProviderName);
-  const activePickupLocationList = await pickupLocationService.listPickupLocations({}, { includeInactive: false });
-  const connectionResult = provider.testConnection
-    ? await provider.testConnection()
-    : { authenticated: false };
-
-  return {
-    activePickupLocationCount: activePickupLocationList.pagination.total,
-    activePickupLocations: activePickupLocationList.items.map((location) => ({
-      code: location.code,
-      id: location.id,
-      name: location.name,
-      pickupLocation: location.pickupLocation,
-    })),
-    authenticated: Boolean(connectionResult.authenticated),
-    defaultPickupLocation: connectionResult.pickupLocation || '',
-    provider: normalizedProviderName,
-    readyForShipment: Boolean(
-      connectionResult.authenticated &&
-      (
-        connectionResult.pickupLocation ||
-        activePickupLocationList.items.length > 0
-      ),
-    ),
-  };
-};
-
 const markOrderPacked = async (actor, orderId, payload = {}) => {
   assertDatabaseReady();
   const actorId = normalizeActorId(actor);
@@ -431,7 +378,6 @@ const buildShipmentPayload = ({ order, payload, providerResult }) => {
     orderId: order._id,
     package: normalizeShipmentPackageInput(payload),
     pickupAddress: normalizePickupAddress(payload.pickupAddress || {}),
-    pickupLocationId: normalizeOptionalObjectId(payload.pickupLocationId, 'pickup location id'),
     pickupLocation: normalizeText(payload.pickupLocation),
     pickupScheduledAt: normalizeOptionalDate(
       providerResult.pickupScheduledAt || payload.pickupScheduledAt,
@@ -459,7 +405,6 @@ const buildShipmentPayload = ({ order, payload, providerResult }) => {
 const resolveShipmentContext = async ({ order, payload = {} }) => {
   const items = await getOrderItems(order._id);
   const packageInput = normalizeShipmentPackageInput(payload);
-  const pickupLocation = await getShipmentPickupLocation(payload);
   const selectedBoxType = packageInput.boxType && packageInput.boxType !== SHIPPING_CUSTOM_BOX_TYPE
     ? await boxTypeService.getActiveBoxTypeByCode(packageInput.boxType)
     : null;
@@ -471,13 +416,6 @@ const resolveShipmentContext = async ({ order, payload = {} }) => {
   const resolvedPayload = {
     ...payload,
     ...resolvedPackage,
-    ...(pickupLocation
-      ? {
-          pickupLocationId: pickupLocation.id,
-          pickupAddress: buildPickupAddressFromPickupLocation(pickupLocation),
-          pickupLocation: pickupLocation.pickupLocation || pickupLocation.name,
-        }
-      : {}),
   };
   const user = order.userId && typeof order.userId === 'object' ? order.userId : null;
 
@@ -807,7 +745,6 @@ export {
   getStatusData,
   markOrderPacked,
   syncShipmentTracking,
-  testShippingProviderConnection,
 };
 
 export default {
@@ -817,5 +754,4 @@ export default {
   getStatusData,
   markOrderPacked,
   syncShipmentTracking,
-  testShippingProviderConnection,
 };
