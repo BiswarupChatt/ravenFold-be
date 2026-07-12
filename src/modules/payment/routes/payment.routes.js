@@ -7,6 +7,7 @@ import validate from '@/common/middleware/validate.middleware.js';
 import paymentController from '@/modules/payment/controllers/payment.controller.js';
 import {
   createPaymentSessionSchema,
+  recordPaymentAttemptFailureSchema,
   verifyPaymentAttemptSchema,
 } from '@/modules/payment/payment.validator.js';
 import refundRoutes from '@/modules/payment/routes/refund.routes.js';
@@ -38,6 +39,12 @@ router.post(
   authenticateUser,
   validate(verifyPaymentAttemptSchema),
   asyncHandler(paymentController.verifyPaymentAttempt),
+);
+router.post(
+  '/attempts/:paymentAttemptId/failure',
+  authenticateUser,
+  validate(recordPaymentAttemptFailureSchema),
+  asyncHandler(paymentController.recordPaymentAttemptFailure),
 );
 router.post('/webhooks/:provider', asyncHandler(paymentController.handleProviderWebhook));
 router.post('/webhook', asyncHandler(paymentController.handleWebhook));

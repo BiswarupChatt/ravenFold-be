@@ -47,6 +47,27 @@ const normalizeProvider = (providerName = '') => {
   return normalizedProvider;
 };
 
+const normalizeRecordedAttemptStatus = (statusValue = '') => {
+  const status = normalizeText(statusValue).toLowerCase();
+  const allowedStatuses = [PAYMENT_ATTEMPT_STATUS.CANCELLED, PAYMENT_ATTEMPT_STATUS.FAILED];
+
+  if (!allowedStatuses.includes(status)) {
+    throw new ApiError(400, `status must be one of: ${allowedStatuses.join(', ')}`);
+  }
+
+  return status;
+};
+
+const normalizeOptionalPaymentMethod = (methodValue = '') => {
+  const method = normalizeText(methodValue).toLowerCase();
+
+  if (!method) {
+    return '';
+  }
+
+  return Object.values(PAYMENT_METHOD).includes(method) ? method : '';
+};
+
 const assertStorefrontCheckoutSupport = (providerName) => {
   if (providerName === PAYMENT_PROVIDER.JUSPAY) {
     throw new ApiError(503, 'Juspay checkout is not enabled in the storefront yet');
@@ -439,10 +460,25 @@ const createPaymentSession = async (actor, payload = {}) => {
     paymentAttempt.status = session.status || PAYMENT_ATTEMPT_STATUS.CREATED;
     await paymentAttempt.save();
 
+    const fromStatus = order.status;
+    const fromPaymentStatus = order.paymentStatus;
     order.paymentFailureReason = '';
+    order.paymentMethod = PAYMENT_METHOD.UNKNOWN;
     order.paymentProvider = providerName;
+    order.paymentStatus = PAYMENT_STATUS.PENDING;
     order.providerOrderId = paymentAttempt.providerOrderId;
+    order.providerPaymentId = '';
     await order.save();
+
+    if (fromStatus !== order.status || fromPaymentStatus !== order.paymentStatus) {
+      await appendOrderStatusHistory({
+        actorId: userId,
+        fromPaymentStatus,
+        fromStatus,
+        note: `Payment attempt started via ${providerName}`,
+        order,
+      });
+    }
 
     return {
       checkoutPayload: session.checkoutPayload || {},
@@ -453,6 +489,30 @@ const createPaymentSession = async (actor, payload = {}) => {
     paymentAttempt.failureReason = error.message || 'Payment session creation failed';
     paymentAttempt.status = PAYMENT_ATTEMPT_STATUS.FAILED;
     await paymentAttempt.save();
+
+    const fromStatus = order.status;
+    const fromPaymentStatus = order.paymentStatus;
+
+    if (order.paymentStatus !== PAYMENT_STATUS.PAID) {
+      order.paymentFailureReason = paymentAttempt.failureReason;
+      order.paymentMethod = PAYMENT_METHOD.UNKNOWN;
+      order.paymentProvider = providerName;
+      order.paymentStatus = PAYMENT_STATUS.FAILED;
+      order.providerOrderId = paymentAttempt.providerOrderId || '';
+      order.providerPaymentId = paymentAttempt.providerPaymentId || '';
+      await order.save();
+
+      if (fromStatus !== order.status || fromPaymentStatus !== order.paymentStatus) {
+        await appendOrderStatusHistory({
+          actorId: userId,
+          fromPaymentStatus,
+          fromStatus,
+          note: `Payment session failed via ${providerName}`,
+          order,
+        });
+      }
+    }
+
     throw error;
   }
 };
@@ -562,6 +622,15 @@ const applyPaymentResultToOrder = async ({ actorId = null, order, paymentAttempt
     order.providerPaymentId = paymentAttempt.providerPaymentId;
   }
 
+  if (result.status === PAYMENT_ATTEMPT_STATUS.CANCELLED && order.paymentStatus !== PAYMENT_STATUS.PAID) {
+    order.paymentFailureReason = paymentAttempt.failureReason || 'Payment was cancelled';
+    order.paymentMethod = paymentAttempt.paymentMethod || PAYMENT_METHOD.UNKNOWN;
+    order.paymentProvider = paymentAttempt.provider;
+    order.paymentStatus = PAYMENT_STATUS.PENDING;
+    order.providerOrderId = paymentAttempt.providerOrderId;
+    order.providerPaymentId = paymentAttempt.providerPaymentId;
+  }
+
   await order.save();
 
   if (fromStatus !== order.status || fromPaymentStatus !== order.paymentStatus) {
@@ -647,6 +716,50 @@ const refreshPaymentAttemptStatus = async (actor, paymentAttemptId) => {
   };
 };
 
+const recordPaymentAttemptFailure = async (actor, paymentAttemptId, payload = {}) => {
+  assertDatabaseReady();
+  const paymentAttempt = await getOwnedPaymentAttempt(actor, paymentAttemptId);
+  const order = await Order.findOne({
+    _id: paymentAttempt.orderId,
+    userId: paymentAttempt.userId,
+  }).exec();
+
+  if (!order) {
+    throw new ApiError(404, 'Order not found');
+  }
+
+  if (paymentAttempt.status === PAYMENT_ATTEMPT_STATUS.PAID && order.paymentStatus === PAYMENT_STATUS.PAID) {
+    return {
+      orderId: order._id.toString(),
+      paymentAttempt: formatPaymentAttempt(paymentAttempt),
+      paymentStatus: order.paymentStatus,
+    };
+  }
+
+  await applyPaymentResultToOrder({
+    actorId: paymentAttempt.userId,
+    order,
+    paymentAttempt,
+    result: {
+      failureReason: normalizeText(payload.failureReason)
+        || (payload.status === PAYMENT_ATTEMPT_STATUS.CANCELLED ? 'Payment was cancelled' : 'Payment failed'),
+      paymentMethod: normalizeOptionalPaymentMethod(payload.paymentMethod)
+        || paymentAttempt.paymentMethod
+        || PAYMENT_METHOD.UNKNOWN,
+      providerOrderId: normalizeText(payload.providerOrderId) || paymentAttempt.providerOrderId || '',
+      providerPaymentId: normalizeText(payload.providerPaymentId) || paymentAttempt.providerPaymentId || '',
+      rawStatusResponse: payload.metadata || null,
+      status: normalizeRecordedAttemptStatus(payload.status),
+    },
+  });
+
+  return {
+    orderId: order._id.toString(),
+    paymentAttempt: formatPaymentAttempt(paymentAttempt),
+    paymentStatus: order.paymentStatus,
+  };
+};
+
 const applyWebhookResult = async (providerName, result) => {
   const paymentAttempt = await PaymentAttempt.findOne({
     provider: providerName,
@@ -708,6 +821,7 @@ export {
   listAdminPaymentAttempts,
   listAdminPayments,
   processWebhook,
+  recordPaymentAttemptFailure,
   refreshPaymentAttemptStatus,
   verifyPaymentAttempt,
 };
@@ -720,6 +834,7 @@ export default {
   listAdminPaymentAttempts,
   listAdminPayments,
   processWebhook,
+  recordPaymentAttemptFailure,
   refreshPaymentAttemptStatus,
   verifyPaymentAttempt,
 };

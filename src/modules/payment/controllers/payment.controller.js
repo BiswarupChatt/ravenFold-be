@@ -30,6 +30,14 @@ const verifyPaymentAttempt = async (req, res) => {
   );
 };
 
+const recordPaymentAttemptFailure = async (req, res) => {
+  return sendSuccess(
+    res,
+    await paymentService.recordPaymentAttemptFailure(req.user, req.params.paymentAttemptId, req.body),
+    'Payment failure recorded',
+  );
+};
+
 const getPaymentAttemptStatus = async (req, res) => {
   return sendSuccess(
     res,
@@ -58,6 +66,7 @@ export {
   handleWebhook,
   listAdminPaymentAttempts,
   listAdminPayments,
+  recordPaymentAttemptFailure,
   verifyPaymentAttempt,
 };
 
@@ -69,5 +78,6 @@ export default {
   handleWebhook,
   listAdminPaymentAttempts,
   listAdminPayments,
+  recordPaymentAttemptFailure,
   verifyPaymentAttempt,
 };

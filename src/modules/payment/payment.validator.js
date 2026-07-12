@@ -1,6 +1,7 @@
 import {
   assertNoUnknownKeys,
   assertObjectField,
+  assertRequiredKeys,
   assertStringLikeField,
   createSchema,
   expectObject,
@@ -16,6 +17,14 @@ const verifyPaymentFields = [
   'razorpay_signature',
   'signature',
   'metadata',
+];
+const recordPaymentFailureFields = [
+  'failureReason',
+  'metadata',
+  'paymentMethod',
+  'providerOrderId',
+  'providerPaymentId',
+  'status',
 ];
 
 const createPaymentSessionSchema = createSchema((value) => {
@@ -40,7 +49,20 @@ const verifyPaymentAttemptSchema = createSchema((value) => {
   return pickAllowedKeys(payload, verifyPaymentFields);
 });
 
+const recordPaymentAttemptFailureSchema = createSchema((value) => {
+  const payload = expectObject(value);
+
+  assertNoUnknownKeys(payload, recordPaymentFailureFields);
+  assertRequiredKeys(payload, ['status']);
+  ['failureReason', 'paymentMethod', 'providerOrderId', 'providerPaymentId', 'status']
+    .forEach((field) => assertStringLikeField(payload, field));
+  assertObjectField(payload, 'metadata');
+
+  return pickAllowedKeys(payload, recordPaymentFailureFields);
+});
+
 export {
   createPaymentSessionSchema,
+  recordPaymentAttemptFailureSchema,
   verifyPaymentAttemptSchema,
 };

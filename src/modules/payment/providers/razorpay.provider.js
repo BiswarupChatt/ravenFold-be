@@ -4,6 +4,7 @@ import paymentConfig from '@/config/payment.config.js';
 import {
   assertProviderConfigured,
   encodeBasicAuth,
+  getJson,
   hmacSha256,
   postJson,
   timingSafeEqual,
@@ -44,6 +45,28 @@ const normalizeMethod = (method = '') => {
   }
 
   return PAYMENT_METHOD.UNKNOWN;
+};
+
+const normalizeStatus = (status = '') => {
+  const normalizedStatus = String(status || '').toLowerCase();
+
+  if (normalizedStatus === 'captured') {
+    return PAYMENT_ATTEMPT_STATUS.PAID;
+  }
+
+  if (normalizedStatus === 'authorized') {
+    return PAYMENT_ATTEMPT_STATUS.AUTHORIZED;
+  }
+
+  if (normalizedStatus === 'failed') {
+    return PAYMENT_ATTEMPT_STATUS.FAILED;
+  }
+
+  if (normalizedStatus === 'created') {
+    return PAYMENT_ATTEMPT_STATUS.CREATED;
+  }
+
+  return PAYMENT_ATTEMPT_STATUS.PENDING;
 };
 
 const createPaymentSession = async ({ order, paymentAttempt, user }) => {
@@ -157,6 +180,47 @@ const verifyPayment = async ({ payload, paymentAttempt }) => {
   };
 };
 
+const fetchPaymentStatus = async ({ paymentAttempt }) => {
+  assertProviderConfigured(paymentConfig.razorpay.keyId && paymentConfig.razorpay.keySecret, PAYMENT_PROVIDER.RAZORPAY);
+
+  if (!paymentAttempt?.providerOrderId) {
+    throw new ApiError(400, 'Razorpay order id is required to fetch payment status');
+  }
+
+  const statusResponse = await getJson(
+    `${RAZORPAY_API_BASE_URL}/orders/${encodeURIComponent(paymentAttempt.providerOrderId)}/payments`,
+    {
+      headers: {
+        Authorization: getAuthHeader(),
+      },
+    },
+  );
+  const payments = Array.isArray(statusResponse?.items) ? statusResponse.items : [];
+  const latestPayment = payments
+    .slice()
+    .sort((left, right) => Number(right?.created_at || 0) - Number(left?.created_at || 0))[0] || null;
+
+  if (!latestPayment) {
+    return {
+      failureReason: '',
+      paymentMethod: PAYMENT_METHOD.UNKNOWN,
+      providerOrderId: paymentAttempt.providerOrderId,
+      providerPaymentId: '',
+      rawStatusResponse: statusResponse,
+      status: PAYMENT_ATTEMPT_STATUS.PENDING,
+    };
+  }
+
+  return {
+    failureReason: latestPayment.error_description || latestPayment.error_reason || '',
+    paymentMethod: normalizeMethod(latestPayment.method),
+    providerOrderId: latestPayment.order_id || paymentAttempt.providerOrderId,
+    providerPaymentId: latestPayment.id || '',
+    rawStatusResponse: statusResponse,
+    status: normalizeStatus(latestPayment.status),
+  };
+};
+
 const handleWebhook = ({ headers, rawBody }) => {
   assertProviderConfigured(paymentConfig.razorpay.webhookSecret, PAYMENT_PROVIDER.RAZORPAY);
 
@@ -194,6 +258,7 @@ const handleWebhook = ({ headers, rawBody }) => {
 export default {
   createRefund,
   createPaymentSession,
+  fetchPaymentStatus,
   handleWebhook,
   name: PAYMENT_PROVIDER.RAZORPAY,
   verifyPayment,
