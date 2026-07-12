@@ -56,6 +56,47 @@ const addressSnapshotSchema = new mongoose.Schema(
   },
 );
 
+const appliedPromotionSnapshotSchema = new mongoose.Schema(
+  {
+    promotionId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Promotion',
+      required: true,
+    },
+    title: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    type: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    couponCode: {
+      type: String,
+      trim: true,
+      uppercase: true,
+      default: '',
+    },
+    discountAmount: {
+      type: Number,
+      min: 0,
+      default: 0,
+      required: true,
+    },
+    shippingDiscountAmount: {
+      type: Number,
+      min: 0,
+      default: 0,
+      required: true,
+    },
+  },
+  {
+    _id: false,
+  },
+);
+
 const orderSchema = new mongoose.Schema(
   {
     orderNumber: {
@@ -161,6 +202,18 @@ const orderSchema = new mongoose.Schema(
       default: 0,
       required: true,
     },
+    productDiscountAmount: {
+      type: Number,
+      min: 0,
+      default: 0,
+      required: true,
+    },
+    shippingDiscountAmount: {
+      type: Number,
+      min: 0,
+      default: 0,
+      required: true,
+    },
     shippingCharge: {
       type: Number,
       min: 0,
@@ -184,6 +237,10 @@ const orderSchema = new mongoose.Schema(
     billingAddress: {
       type: addressSnapshotSchema,
       required: true,
+    },
+    appliedPromotions: {
+      type: [appliedPromotionSnapshotSchema],
+      default: [],
     },
     placedAt: {
       type: Date,
@@ -227,12 +284,14 @@ orderSchema.pre('validate', function validateOrderTotals() {
   this.subtotal = Number((this.subtotal || 0).toFixed(2));
   this.bagDiscount = Number((this.bagDiscount || 0).toFixed(2));
   this.couponDiscount = Number((this.couponDiscount || 0).toFixed(2));
+  this.productDiscountAmount = Number((this.productDiscountAmount || 0).toFixed(2));
+  this.shippingDiscountAmount = Number((this.shippingDiscountAmount || 0).toFixed(2));
   this.shippingCharge = Number((this.shippingCharge || 0).toFixed(2));
   this.totalPayable = Number((this.totalPayable || 0).toFixed(2));
 });
 
 const Order = mongoose.models.Order || mongoose.model('Order', orderSchema);
 
-export { addressSnapshotSchema, orderSchema };
+export { addressSnapshotSchema, appliedPromotionSnapshotSchema, orderSchema };
 
 export default Order;

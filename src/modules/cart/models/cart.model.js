@@ -22,6 +22,12 @@ const cartSchema = new mongoose.Schema(
       uppercase: true,
       default: 'INR',
     },
+    couponCode: {
+      type: String,
+      trim: true,
+      uppercase: true,
+      default: '',
+    },
     subtotal: {
       type: Number,
       min: 0,

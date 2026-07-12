@@ -1,4 +1,5 @@
 import ApiError from '@/common/errors/api.error.js';
+import { ORDER_STATUS, PAYMENT_STATUS } from '@/common/constants/order.constant.js';
 import { getPagination } from '@/common/utils/pagination.util.js';
 import {
   assertDatabaseReady,
@@ -15,6 +16,8 @@ import {
 import CartItem from '@/modules/cart/models/cart-item.model.js';
 import Cart, { cartStatuses } from '@/modules/cart/models/cart.model.js';
 import InventoryStock from '@/modules/inventory/models/inventory.model.js';
+import Order from '@/modules/order/models/order.model.js';
+import promotionEngineService from '@/modules/promotion/services/promotion-engine.service.js';
 import Product from '@/modules/product/models/product.model.js';
 import ProductVariant from '@/modules/product/models/product-variant.model.js';
 import User from '@/modules/users/models/user.model.js';
@@ -79,14 +82,22 @@ const formatCartItem = (item) => ({
   updatedAt: item.updatedAt,
 });
 
-const formatCart = (cart, items = []) => ({
+const formatCart = (cart, items = [], pricing = {}) => ({
   id: cart.id || cart._id?.toString(),
   userId: getDocumentId(cart.userId),
   status: cart.status,
   currency: cart.currency || DEFAULT_CURRENCY,
+  couponCode: pricing.couponCode ?? cart.couponCode ?? '',
   subtotal: cart.subtotal,
   itemCount: cart.itemCount,
   totalQuantity: cart.totalQuantity,
+  shippingCharge: pricing.shippingCharge ?? 0,
+  shippingDiscountAmount: pricing.shippingDiscountAmount ?? 0,
+  productDiscountAmount: pricing.productDiscountAmount ?? 0,
+  totalDiscountAmount: pricing.totalDiscountAmount ?? 0,
+  total: pricing.total ?? cart.subtotal,
+  appliedPromotions: pricing.appliedPromotions || [],
+  rejectedCoupon: pricing.rejectedCoupon,
   expiresAt: cart.expiresAt,
   items: items.map(formatCartItem),
   createdAt: cart.createdAt,
@@ -382,12 +393,105 @@ const buildCartItemPayload = (target, quantity) => ({
   productSnapshot: target.productSnapshot,
 });
 
+const getNormalizedCouponCode = (couponCode = '') => normalizeText(couponCode).toUpperCase();
+
+const loadPromotionProductMaps = async (items = []) => {
+  const productIds = [...new Set(items.map((item) => getDocumentId(item.productId)).filter(Boolean))];
+  const variantIds = [...new Set(items.map((item) => getDocumentId(item.variantId)).filter(Boolean))];
+
+  const [products, variants] = await Promise.all([
+    productIds.length
+      ? Product.find({ _id: { $in: productIds } })
+        .select('_id categoryId shipping.requiresShipping')
+        .lean()
+        .exec()
+      : Promise.resolve([]),
+    variantIds.length
+      ? ProductVariant.find({ _id: { $in: variantIds } })
+        .select('_id productId shipping.requiresShipping')
+        .lean()
+        .exec()
+      : Promise.resolve([]),
+  ]);
+
+  return {
+    productsById: new Map(products.map((product) => [getDocumentId(product._id), product])),
+    variantsById: new Map(variants.map((variant) => [getDocumentId(variant._id), variant])),
+  };
+};
+
+const getPromotionUserSummary = async (userId) => {
+  const [user, successfulOrderCount] = await Promise.all([
+    User.findById(userId)
+      .select('_id createdAt')
+      .lean()
+      .exec(),
+    Order.countDocuments({
+      userId,
+      paymentStatus: PAYMENT_STATUS.PAID,
+      status: { $ne: ORDER_STATUS.CANCELLED },
+    }).exec(),
+  ]);
+
+  return {
+    createdAt: user?.createdAt || null,
+    successfulOrderCount,
+  };
+};
+
+const buildPromotionContextForCart = async (cart, items = [], { couponCode } = {}) => {
+  const { productsById, variantsById } = await loadPromotionProductMaps(items);
+  const userSummary = await getPromotionUserSummary(cart.userId);
+
+  return {
+    cartId: getDocumentId(cart._id),
+    couponCode: couponCode ?? cart.couponCode ?? '',
+    items: items.map((item) => {
+      const productId = getDocumentId(item.productId);
+      const variantId = getDocumentId(item.variantId);
+      const product = productsById.get(productId);
+      const variant = variantId ? variantsById.get(variantId) : null;
+
+      return {
+        categoryId: getDocumentId(product?.categoryId),
+        lineSubtotal: item.lineTotal,
+        productId,
+        quantity: item.quantity,
+        requiresShipping: variant?.shipping?.requiresShipping ?? product?.shipping?.requiresShipping ?? true,
+        unitPrice: item.priceAtTime,
+        variantId,
+      };
+    }),
+    shippingCharge: 0,
+    subtotal: cart.subtotal,
+    user: userSummary,
+    userId: getDocumentId(cart.userId),
+  };
+};
+
+const calculateCartPricing = async (cart, items = [], { couponCode } = {}) => {
+  const effectiveCouponCode = couponCode ?? cart.couponCode ?? '';
+  const context = await buildPromotionContextForCart(cart, items, { couponCode: effectiveCouponCode });
+  const pricing = await promotionEngineService.evaluatePromotions({ context });
+
+  return {
+    ...pricing,
+    couponCode: getNormalizedCouponCode(effectiveCouponCode),
+  };
+};
+
+const formatCustomerCart = async (cart, items = [], options = {}) => {
+  const pricing = await calculateCartPricing(cart, items, options);
+
+  return formatCart(cart, items, pricing);
+};
+
 const getCart = async (actor) => {
   const userId = normalizeUserId(actor);
   const cart = await getActiveCartDocument(userId);
   const items = await getCartItems(cart._id);
 
-  return formatCart(cart, items);
+  return formatCustomerCart(cart, items);
 };
 
 const listAdminCarts = async (query = {}) => {
@@ -465,7 +569,7 @@ const addCartItem = async (actor, payload = {}) => {
 
   await recalculateCartTotals(cart);
 
-  return formatCart(cart, await getCartItems(cart._id));
+  return formatCustomerCart(cart, await getCartItems(cart._id));
 };
 
 const updateCartItem = async (actor, cartItemId, payload = {}) => {
@@ -487,7 +591,7 @@ const updateCartItem = async (actor, cartItemId, payload = {}) => {
   await item.save();
   await recalculateCartTotals(cart);
 
-  return formatCart(cart, await getCartItems(cart._id));
+  return formatCustomerCart(cart, await getCartItems(cart._id));
 };
 
 const removeCartItem = async (actor, cartItemId) => {
@@ -497,7 +601,53 @@ const removeCartItem = async (actor, cartItemId) => {
   await item.deleteOne();
   await recalculateCartTotals(cart);
 
-  return formatCart(cart, await getCartItems(cart._id));
+  return formatCustomerCart(cart, await getCartItems(cart._id));
+};
+
+const calculateCart = async (actor, payload = {}) => {
+  const userId = normalizeUserId(actor);
+  const cart = await getActiveCartDocument(userId);
+  const items = await getCartItems(cart._id);
+  const couponCode = hasOwn(payload, 'couponCode')
+    ? getNormalizedCouponCode(payload.couponCode)
+    : getNormalizedCouponCode(cart.couponCode);
+
+  return formatCustomerCart(cart, items, { couponCode });
+};
+
+const applyCoupon = async (actor, payload = {}) => {
+  const userId = normalizeUserId(actor);
+  const couponCode = getNormalizedCouponCode(payload.couponCode);
+  const cart = await getActiveCartDocument(userId);
+  const items = await getCartItems(cart._id);
+
+  if (!couponCode) {
+    throw new ApiError(400, 'couponCode is required');
+  }
+
+  if (!items.length) {
+    throw new ApiError(400, 'Cannot apply a coupon to an empty cart');
+  }
+
+  const pricing = await calculateCartPricing(cart, items, { couponCode });
+
+  if (!pricing.rejectedCoupon) {
+    cart.couponCode = couponCode;
+    await cart.save();
+  }
+
+  return formatCart(cart, items, pricing);
+};
+
+const removeCoupon = async (actor) => {
+  const userId = normalizeUserId(actor);
+  const cart = await getActiveCartDocument(userId);
+  const items = await getCartItems(cart._id);
+
+  cart.couponCode = '';
+  await cart.save();
+
+  return formatCustomerCart(cart, items, { couponCode: '' });
 };
 
 const clearCart = async (actor) => {
@@ -507,33 +657,40 @@ const clearCart = async (actor) => {
   if (!cart) {
     const emptyCart = await getActiveCartDocument(userId);
 
-    return formatCart(emptyCart, []);
+    return formatCustomerCart(emptyCart, [], { couponCode: '' });
   }
 
   await CartItem.deleteMany({ cartId: cart._id }).exec();
+  cart.couponCode = '';
   await recalculateCartTotals(cart);
 
-  return formatCart(cart, []);
+  return formatCustomerCart(cart, [], { couponCode: '' });
 };
 
 export {
   addCartItem,
+  applyCoupon,
+  calculateCart,
   clearCart,
   getAdminCart,
   getCart,
   getStatusData,
   listAdminCarts,
   removeCartItem,
+  removeCoupon,
   updateCartItem,
 };
 
 export default {
   addCartItem,
+  applyCoupon,
+  calculateCart,
   clearCart,
   getAdminCart,
   getCart,
   getStatusData,
   listAdminCarts,
   removeCartItem,
+  removeCoupon,
   updateCartItem,
 };

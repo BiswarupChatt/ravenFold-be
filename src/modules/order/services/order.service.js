@@ -25,6 +25,7 @@ import ProductVariant from '@/modules/product/models/product-variant.model.js';
 import Payment from '@/modules/payment/models/payment.model.js';
 import Refund from '@/modules/payment/models/refund.model.js';
 import { formatPayment, formatRefund } from '@/modules/payment/services/refund.service.js';
+import promotionEngineService from '@/modules/promotion/services/promotion-engine.service.js';
 import Shipment from '@/modules/shipping/models/shipment.model.js';
 import ShipmentEvent from '@/modules/shipping/models/shipment-event.model.js';
 import { formatShipment, formatShipmentEvent } from '@/modules/shipping/services/shipment-formatters.js';
@@ -195,6 +196,25 @@ const getActiveCartWithItems = async (userId) => {
   };
 };
 
+const getPromotionUserSummary = async (userId) => {
+  const [user, successfulOrderCount] = await Promise.all([
+    User.findById(userId)
+      .select('_id createdAt')
+      .lean()
+      .exec(),
+    Order.countDocuments({
+      userId,
+      paymentStatus: PAYMENT_STATUS.PAID,
+      status: { $ne: ORDER_STATUS.CANCELLED },
+    }).exec(),
+  ]);
+
+  return {
+    createdAt: user?.createdAt || null,
+    successfulOrderCount,
+  };
+};
+
 const resolveOrderItemTarget = async (cartItem) => {
   const productId = normalizeObjectId(cartItem.productId, 'product id');
   const variantId = normalizeOptionalObjectId(cartItem.variantId, 'variant id');
@@ -242,9 +262,11 @@ const resolveOrderItemTarget = async (cartItem) => {
   const quantity = normalizePositiveInteger(cartItem.quantity);
 
   return {
+    categoryId: getDocumentId(product.categoryId),
     productId,
     variantId,
     quantity,
+    requiresShipping: variant?.shipping?.requiresShipping ?? product?.shipping?.requiresShipping ?? true,
     priceAtTime: price,
     lineTotal: Number((price * quantity).toFixed(2)),
     priceSnapshot: {
@@ -268,7 +290,35 @@ const buildOrderItems = async (cartItems) => {
   return Promise.all(cartItems.map(resolveOrderItemTarget));
 };
 
-const calculateTotals = (items) => {
+const buildPromotionContextForOrderItems = async (userId, items = [], { couponCode = '', shippingCharge = 0 } = {}) => ({
+  couponCode,
+  items: items.map((item) => ({
+    categoryId: item.categoryId || '',
+    lineSubtotal: item.lineTotal,
+    productId: getDocumentId(item.productId),
+    quantity: item.quantity,
+    requiresShipping: item.requiresShipping !== false,
+    unitPrice: item.priceAtTime,
+    variantId: getDocumentId(item.variantId),
+  })),
+  shippingCharge,
+  subtotal: Number(items.reduce((sum, item) => sum + Number(item.lineTotal || 0), 0).toFixed(2)),
+  user: await getPromotionUserSummary(userId),
+  userId,
+});
+
+const buildAppliedPromotionSnapshots = (appliedPromotions = []) => {
+  return appliedPromotions.map((promotion) => ({
+    couponCode: promotion.couponCode || '',
+    discountAmount: Number(promotion.discountAmount || 0),
+    promotionId: promotion.promotionId,
+    shippingDiscountAmount: Number(promotion.shippingDiscountAmount || 0),
+    title: promotion.title || '',
+    type: promotion.type || '',
+  }));
+};
+
+const calculateTotals = (items, pricing = {}) => {
   const summary = items.reduce(
     (totals, item) => {
       const basePrice = Number(item.priceSnapshot.basePrice || item.priceAtTime);
@@ -289,15 +339,20 @@ const calculateTotals = (items) => {
   const subtotal = Number(summary.subtotal.toFixed(2));
   const totalMrp = Number(Math.max(summary.totalMrp, subtotal).toFixed(2));
   const bagDiscount = Number(Math.max(totalMrp - subtotal, 0).toFixed(2));
-  const couponDiscount = 0;
-  const shippingCharge = 0;
-  const totalPayable = Number(Math.max(subtotal - couponDiscount + shippingCharge, 0).toFixed(2));
+  const productDiscountAmount = Number((pricing.productDiscountAmount || 0).toFixed(2));
+  const couponDiscount = productDiscountAmount;
+  const shippingCharge = Number((pricing.shippingCharge || 0).toFixed(2));
+  const shippingDiscountAmount = Number((pricing.shippingDiscountAmount || 0).toFixed(2));
+  const totalPayable = Number(Math.max(subtotal - productDiscountAmount + shippingCharge - shippingDiscountAmount, 0).toFixed(2));
 
   return {
+    appliedPromotions: buildAppliedPromotionSnapshots(pricing.appliedPromotions || []),
     bagDiscount,
     couponDiscount,
     itemCount: items.length,
+    productDiscountAmount,
     shippingCharge,
+    shippingDiscountAmount,
     subtotal,
     totalMrp,
     totalPayable,
@@ -346,6 +401,15 @@ const formatProductShipping = (product = null) => {
   };
 };
 
+const formatAppliedPromotion = (promotion = {}) => ({
+  couponCode: promotion.couponCode || '',
+  discountAmount: Number(promotion.discountAmount || 0),
+  promotionId: getDocumentId(promotion.promotionId),
+  shippingDiscountAmount: Number(promotion.shippingDiscountAmount || 0),
+  title: promotion.title || '',
+  type: promotion.type || '',
+});
+
 const formatOrderItem = (item, { includeProductShipping = false } = {}) => {
   const formattedItem = {
     id: item.id || item._id?.toString(),
@@ -369,6 +433,7 @@ const formatOrderItem = (item, { includeProductShipping = false } = {}) => {
 };
 
 const formatOrder = (order, items = [], paymentDetails = {}, options = {}) => ({
+  appliedPromotions: Array.isArray(order.appliedPromotions) ? order.appliedPromotions.map(formatAppliedPromotion) : [],
   id: order.id || order._id?.toString(),
   bagDiscount: order.bagDiscount,
   billingAddress: formatAddressSnapshot(order.billingAddress),
@@ -391,10 +456,12 @@ const formatOrder = (order, items = [], paymentDetails = {}, options = {}) => ({
   placedAt: order.placedAt,
   providerOrderId: order.providerOrderId || '',
   providerPaymentId: order.providerPaymentId || '',
+  productDiscountAmount: order.productDiscountAmount || 0,
   refunds: paymentDetails.refunds || [],
   shipments: paymentDetails.shipments || [],
   shippingAddress: formatAddressSnapshot(order.shippingAddress),
   shippingCharge: order.shippingCharge,
+  shippingDiscountAmount: order.shippingDiscountAmount || 0,
   status: order.status,
   subtotal: order.subtotal,
   totalMrp: order.totalMrp,
@@ -644,7 +711,21 @@ const createCheckoutOrder = async (actor, payload = {}) => {
   });
   const { cart, items: cartItems } = await getActiveCartWithItems(userId);
   const orderItems = await buildOrderItems(cartItems);
-  const totals = calculateTotals(orderItems);
+  const promotionPricing = await promotionEngineService.evaluatePromotions({
+    context: await buildPromotionContextForOrderItems(userId, orderItems, {
+      couponCode: cart.couponCode || '',
+      shippingCharge: 0,
+    }),
+  });
+
+  if (promotionPricing.rejectedCoupon) {
+    throw new ApiError(
+      409,
+      `Coupon could not be applied during checkout: ${promotionPricing.rejectedCoupon.reason}`,
+    );
+  }
+
+  const totals = calculateTotals(orderItems, promotionPricing);
   let order = null;
   let createdItems = [];
   let inventoryReserved = false;
@@ -875,6 +956,8 @@ const updateAdminOrderStatus = async (actor, orderId, payload = {}) => {
 };
 
 export {
+  buildAppliedPromotionSnapshots,
+  calculateTotals,
   createCheckoutOrder,
   getAdminOrder,
   getCustomerOrder,
@@ -886,6 +969,8 @@ export {
 };
 
 export default {
+  buildAppliedPromotionSnapshots,
+  calculateTotals,
   createCheckoutOrder,
   getAdminOrder,
   getCustomerOrder,

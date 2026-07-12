@@ -1,0 +1,45 @@
+const PROMOTION_TYPE = Object.freeze({
+  PERCENTAGE_DISCOUNT: 'PERCENTAGE_DISCOUNT',
+  FIXED_DISCOUNT: 'FIXED_DISCOUNT',
+  BUY_X_GET_Y: 'BUY_X_GET_Y',
+  FREE_SHIPPING: 'FREE_SHIPPING',
+  CATEGORY_DISCOUNT: 'CATEGORY_DISCOUNT',
+  PRODUCT_DISCOUNT: 'PRODUCT_DISCOUNT',
+  COUPON: 'COUPON',
+  FIRST_ORDER: 'FIRST_ORDER',
+  NEW_USER: 'NEW_USER',
+  CART_VALUE: 'CART_VALUE',
+});
+
+const PROMOTION_APPLICABLE_ON = Object.freeze({
+  ALL_PRODUCTS: 'ALL_PRODUCTS',
+  SPECIFIC_PRODUCTS: 'SPECIFIC_PRODUCTS',
+  SPECIFIC_CATEGORIES: 'SPECIFIC_CATEGORIES',
+});
+
+const PROMOTION_DISCOUNT_METHOD = Object.freeze({
+  PERCENTAGE: 'PERCENTAGE',
+  FIXED: 'FIXED',
+});
+
+const promotionTypes = Object.values(PROMOTION_TYPE);
+const promotionApplicableOnValues = Object.values(PROMOTION_APPLICABLE_ON);
+const promotionDiscountMethods = Object.values(PROMOTION_DISCOUNT_METHOD);
+
+export {
+  PROMOTION_APPLICABLE_ON,
+  PROMOTION_DISCOUNT_METHOD,
+  PROMOTION_TYPE,
+  promotionApplicableOnValues,
+  promotionDiscountMethods,
+  promotionTypes,
+};
+
+export default {
+  PROMOTION_APPLICABLE_ON,
+  PROMOTION_DISCOUNT_METHOD,
+  PROMOTION_TYPE,
+  promotionApplicableOnValues,
+  promotionDiscountMethods,
+  promotionTypes,
+};

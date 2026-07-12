@@ -24,8 +24,10 @@ const validate = (schema, property = 'body') => {
       const { error, value } = schema.validate(req[property], { abortEarly: false });
 
       if (error) {
-        const details = error.details ? error.details.map((item) => item.message) : error.message;
-        return next(new ApiError(400, 'Validation failed', details));
+        const details = error.details ? error.details.map((item) => item.message) : [error.message];
+        const message = details.length === 1 ? details[0] : 'Validation failed';
+
+        return next(new ApiError(400, message, details));
       }
 
       setValidatedValue(req, property, value);

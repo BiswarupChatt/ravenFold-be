@@ -9,6 +9,7 @@ import {
 } from '@/common/utils/request-schema.util.js';
 
 const addCartItemFields = ['productId', 'variantId', 'quantity'];
+const couponFields = ['couponCode'];
 
 const addCartItemSchema = createSchema((value) => {
   const payload = expectObject(value);
@@ -32,7 +33,28 @@ const updateCartItemSchema = createSchema((value) => {
   return pickAllowedKeys(payload, ['quantity']);
 });
 
+const calculateCartSchema = createSchema((value) => {
+  const payload = value === null || value === undefined ? {} : expectObject(value);
+
+  assertNoUnknownKeys(payload, couponFields);
+  assertStringLikeField(payload, 'couponCode');
+
+  return pickAllowedKeys(payload, couponFields);
+});
+
+const applyCouponSchema = createSchema((value) => {
+  const payload = expectObject(value);
+
+  assertNoUnknownKeys(payload, couponFields);
+  assertRequiredKeys(payload, ['couponCode']);
+  assertStringLikeField(payload, 'couponCode');
+
+  return pickAllowedKeys(payload, couponFields);
+});
+
 export {
   addCartItemSchema,
+  applyCouponSchema,
+  calculateCartSchema,
   updateCartItemSchema,
 };

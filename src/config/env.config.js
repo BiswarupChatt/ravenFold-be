@@ -27,6 +27,7 @@ export const cloudinaryApiKey = process.env.CLOUDINARY_API_KEY || '';
 export const cloudinaryApiSecret = process.env.CLOUDINARY_API_SECRET || '';
 export const cloudinaryUploadFolder = process.env.CLOUDINARY_UPLOAD_FOLDER || 'ravenfold/products';
 export const paymentDefaultProvider = process.env.PAYMENT_DEFAULT_PROVIDER || 'razorpay';
+export const promotionNewUserEligibilityDays = Number(process.env.PROMOTION_NEW_USER_ELIGIBILITY_DAYS) || 30;
 export const shippingDefaultProvider = process.env.SHIPPING_DEFAULT_PROVIDER || 'manual';
 export const shiprocketEmail = process.env.SHIPROCKET_EMAIL || '';
 export const shiprocketPassword = process.env.SHIPROCKET_PASSWORD || '';
@@ -65,6 +66,7 @@ export default {
   nodeEnv,
   paymentDefaultProvider,
   port,
+  promotionNewUserEligibilityDays,
   redisUrl,
   delhiveryBaseUrl,
   delhiveryPickupLocation,

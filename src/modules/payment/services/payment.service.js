@@ -21,6 +21,7 @@ import Order from '@/modules/order/models/order.model.js';
 import PaymentAttempt from '@/modules/payment/models/payment-attempt.model.js';
 import Payment from '@/modules/payment/models/payment.model.js';
 import { getPaymentProvider, listPaymentProviders } from '@/modules/payment/providers/payment-provider.registry.js';
+import promotionService from '@/modules/promotion/services/promotion.service.js';
 import User from '@/modules/users/models/user.model.js';
 
 const normalizeUserId = (actor = null) => {
@@ -611,6 +612,8 @@ const applyPaymentResultToOrder = async ({ actorId = null, order, paymentAttempt
       paymentAttempt,
       result,
     });
+
+    await promotionService.recordPromotionUsageForOrder(order);
   }
 
   if (result.status === PAYMENT_ATTEMPT_STATUS.FAILED && order.paymentStatus !== PAYMENT_STATUS.PAID) {

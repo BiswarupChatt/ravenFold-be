@@ -7,6 +7,8 @@ import validate from '@/common/middleware/validate.middleware.js';
 import cartController from '@/modules/cart/controllers/cart.controller.js';
 import {
   addCartItemSchema,
+  applyCouponSchema,
+  calculateCartSchema,
   updateCartItemSchema,
 } from '@/modules/cart/cart.validator.js';
 
@@ -32,6 +34,10 @@ router
   .route('/')
   .get(authenticateUser, asyncHandler(cartController.getCart))
   .delete(authenticateUser, asyncHandler(cartController.clearCart));
+
+router.post('/calculate', authenticateUser, validate(calculateCartSchema), asyncHandler(cartController.calculateCart));
+router.post('/apply-coupon', authenticateUser, validate(applyCouponSchema), asyncHandler(cartController.applyCoupon));
+router.post('/remove-coupon', authenticateUser, asyncHandler(cartController.removeCoupon));
 
 router.post('/items', authenticateUser, validate(addCartItemSchema), asyncHandler(cartController.addCartItem));
 
