@@ -113,25 +113,15 @@ This is the correct baseline for:
 - promotion usage recording
 - preventing usage creation during preview-only cart calculation
 
-### Existing coupon module conflict
+### Coupon ownership
 
-There is already a `coupon` module registered in `src/routes/index.js`, but it is only a placeholder:
-
-- `src/modules/coupon/routes/coupon.routes.js`
-- `src/modules/coupon/services/coupon.service.js`
-- `src/modules/coupon/models/coupon.model.js` is empty
-- `src/modules/coupon/models/coupon-usage.model.js` is empty
-
-This creates an architecture conflict:
-
-- either the coupon module must be replaced by the promotion module
-- or coupon behavior must become a thin alias over the new promotion system
+Coupon behavior is now owned by the promotion module instead of a separate placeholder `coupon` module.
 
 Recommended direction:
 
 - keep `/promotions` as the main admin/customer promotion API
-- move coupon logic into the promotion module
-- either remove the placeholder coupon module later or make `/coupons` proxy promotion-backed coupon lookups without maintaining two separate data models
+- keep cart coupon application logic backed by promotion evaluation
+- avoid reintroducing a duplicate `/coupons` module unless it becomes a thin alias over the same promotion source of truth
 
 ## Proposed Module Structure For This Repo
 
@@ -215,7 +205,6 @@ src/modules/promotion/
 
 - `src/routes/index.js`
   - register `promotion.routes.js`
-  - decide whether to keep or remove the placeholder `/coupons` route
 
 ### Cart module
 

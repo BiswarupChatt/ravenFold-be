@@ -69,12 +69,6 @@ const normalizeOptionalPaymentMethod = (methodValue = '') => {
   return Object.values(PAYMENT_METHOD).includes(method) ? method : '';
 };
 
-const assertStorefrontCheckoutSupport = (providerName) => {
-  if (providerName === PAYMENT_PROVIDER.JUSPAY) {
-    throw new ApiError(503, 'Juspay checkout is not enabled in the storefront yet');
-  }
-};
-
 const formatPaymentAttempt = (attempt) => ({
   amount: attempt.amount,
   createdAt: attempt.createdAt,
@@ -433,7 +427,6 @@ const getPayableOrder = async (actor, orderId) => {
 const createPaymentSession = async (actor, payload = {}) => {
   assertDatabaseReady();
   const providerName = normalizeProvider(payload.provider);
-  assertStorefrontCheckoutSupport(providerName);
   const provider = getPaymentProvider(providerName);
   const { order, userId } = await getPayableOrder(actor, payload.orderId);
   const user = await getUser(userId);
@@ -719,6 +712,87 @@ const refreshPaymentAttemptStatus = async (actor, paymentAttemptId) => {
   };
 };
 
+const reconcilePaymentAttemptDocument = async (paymentAttempt) => {
+  const provider = getPaymentProvider(paymentAttempt.provider);
+
+  if (typeof provider.fetchPaymentStatus !== 'function') {
+    return {
+      paymentAttemptId: paymentAttempt._id.toString(),
+      skipped: 'provider_fetch_unsupported',
+    };
+  }
+
+  const order = await Order.findById(paymentAttempt.orderId).exec();
+
+  if (!order) {
+    return {
+      paymentAttemptId: paymentAttempt._id.toString(),
+      skipped: 'order_not_found',
+    };
+  }
+
+  const result = await provider.fetchPaymentStatus({ order, paymentAttempt });
+
+  await applyPaymentResultToOrder({
+    actorId: paymentAttempt.userId,
+    order,
+    paymentAttempt,
+    result,
+  });
+
+  return {
+    paymentAttemptId: paymentAttempt._id.toString(),
+    status: paymentAttempt.status,
+  };
+};
+
+const reconcileLatestPendingPaymentForOrder = async (orderId) => {
+  assertDatabaseReady();
+  const paymentAttempt = await PaymentAttempt.findOne({
+    orderId: normalizeObjectId(orderId, 'order id'),
+    status: {
+      $in: [
+        PAYMENT_ATTEMPT_STATUS.AUTHORIZED,
+        PAYMENT_ATTEMPT_STATUS.CREATED,
+        PAYMENT_ATTEMPT_STATUS.PENDING,
+      ],
+    },
+  })
+    .sort({ updatedAt: -1, createdAt: -1 })
+    .exec();
+
+  if (!paymentAttempt) {
+    return null;
+  }
+
+  return reconcilePaymentAttemptDocument(paymentAttempt);
+};
+
+const reconcileStalePaymentAttempts = async ({ limit = 25, minAgeMs = 300000 } = {}) => {
+  assertDatabaseReady();
+  const cutoff = new Date(Date.now() - Math.max(Number(minAgeMs || 0), 0));
+  const paymentAttempts = await PaymentAttempt.find({
+    status: {
+      $in: [
+        PAYMENT_ATTEMPT_STATUS.AUTHORIZED,
+        PAYMENT_ATTEMPT_STATUS.CREATED,
+        PAYMENT_ATTEMPT_STATUS.PENDING,
+      ],
+    },
+    updatedAt: { $lte: cutoff },
+  })
+    .sort({ updatedAt: 1, createdAt: 1 })
+    .limit(Math.max(Number(limit || 0), 1))
+    .exec();
+  const results = [];
+
+  for (const paymentAttempt of paymentAttempts) {
+    results.push(await reconcilePaymentAttemptDocument(paymentAttempt));
+  }
+
+  return results;
+};
+
 const recordPaymentAttemptFailure = async (actor, paymentAttemptId, payload = {}) => {
   assertDatabaseReady();
   const paymentAttempt = await getOwnedPaymentAttempt(actor, paymentAttemptId);
@@ -817,26 +891,28 @@ const processWebhook = async (payload) => ({
 });
 
 export {
-  assertStorefrontCheckoutSupport,
   createPaymentSession,
   getStatusData,
   handleProviderWebhook,
   listAdminPaymentAttempts,
   listAdminPayments,
   processWebhook,
+  reconcileLatestPendingPaymentForOrder,
+  reconcileStalePaymentAttempts,
   recordPaymentAttemptFailure,
   refreshPaymentAttemptStatus,
   verifyPaymentAttempt,
 };
 
 export default {
-  assertStorefrontCheckoutSupport,
   createPaymentSession,
   getStatusData,
   handleProviderWebhook,
   listAdminPaymentAttempts,
   listAdminPayments,
   processWebhook,
+  reconcileLatestPendingPaymentForOrder,
+  reconcileStalePaymentAttempts,
   recordPaymentAttemptFailure,
   refreshPaymentAttemptStatus,
   verifyPaymentAttempt,

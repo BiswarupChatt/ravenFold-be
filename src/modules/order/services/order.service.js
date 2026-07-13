@@ -2,6 +2,7 @@ import ApiError from '@/common/errors/api.error.js';
 import { sendSuccess } from '@/common/helpers/response.helper.js';
 import logger from '@/common/logger/logger.js';
 import { ORDER_STATUS, PAYMENT_STATUS } from '@/common/constants/order.constant.js';
+import { PAYMENT_ATTEMPT_STATUS } from '@/common/constants/payment.constant.js';
 import { getPagination } from '@/common/utils/pagination.util.js';
 import {
   assertDatabaseReady,
@@ -23,8 +24,10 @@ import Order from '@/modules/order/models/order.model.js';
 import inventoryService from '@/modules/inventory/services/inventory.service.js';
 import Product from '@/modules/product/models/product.model.js';
 import ProductVariant from '@/modules/product/models/product-variant.model.js';
+import PaymentAttempt from '@/modules/payment/models/payment-attempt.model.js';
 import Payment from '@/modules/payment/models/payment.model.js';
 import Refund from '@/modules/payment/models/refund.model.js';
+import paymentService from '@/modules/payment/services/payment.service.js';
 import { formatPayment, formatRefund } from '@/modules/payment/services/refund.service.js';
 import promotionEngineService from '@/modules/promotion/services/promotion-engine.service.js';
 import reviewReminderService from '@/modules/review/services/review-reminder.service.js';
@@ -693,6 +696,98 @@ const releaseOrderInventory = async ({ actor, orderId, orderItems }) => {
   }
 };
 
+const expireStaleUnpaidOrders = async ({ limit = 25, olderThanMinutes = 30 } = {}) => {
+  assertDatabaseReady();
+  const cutoff = new Date(Date.now() - (Math.max(Number(olderThanMinutes || 0), 0) * 60 * 1000));
+  const orders = await Order.find({
+    createdAt: { $lte: cutoff },
+    paymentStatus: {
+      $in: [PAYMENT_STATUS.FAILED, PAYMENT_STATUS.PENDING],
+    },
+    status: ORDER_STATUS.PENDING,
+  })
+    .sort({ createdAt: 1 })
+    .limit(Math.max(Number(limit || 0), 1))
+    .exec();
+  const expiredOrders = [];
+
+  for (let order of orders) {
+    await paymentService.reconcileLatestPendingPaymentForOrder(order._id);
+    order = await Order.findById(order._id).exec();
+
+    if (!order) {
+      continue;
+    }
+
+    if (order.status !== ORDER_STATUS.PENDING || order.paymentStatus === PAYMENT_STATUS.PAID) {
+      continue;
+    }
+
+    const orderItems = await getOrderItems(order._id);
+
+    for (const item of orderItems.slice().reverse()) {
+      try {
+        await inventoryService.releaseInventoryReservation({
+          note: `Released expired unpaid order reservation for order ${order._id.toString()}`,
+          orderId: order._id,
+          productId: item.productId,
+          quantity: item.quantity,
+          variantId: item.variantId,
+        });
+      } catch (error) {
+        if (![404, 409].includes(error?.statusCode)) {
+          throw error;
+        }
+      }
+    }
+
+    const fromStatus = order.status;
+    const fromPaymentStatus = order.paymentStatus;
+
+    await PaymentAttempt.updateMany(
+      {
+        orderId: order._id,
+        status: {
+          $in: [
+            PAYMENT_ATTEMPT_STATUS.AUTHORIZED,
+            PAYMENT_ATTEMPT_STATUS.CREATED,
+            PAYMENT_ATTEMPT_STATUS.PENDING,
+          ],
+        },
+      },
+      {
+        $set: {
+          failureReason: 'Payment window expired',
+          status: PAYMENT_ATTEMPT_STATUS.CANCELLED,
+        },
+      },
+    ).exec();
+
+    order.cancelledAt = order.cancelledAt || new Date();
+    order.paymentFailureReason = order.paymentFailureReason || 'Payment window expired';
+    order.paymentStatus = PAYMENT_STATUS.FAILED;
+    order.status = ORDER_STATUS.CANCELLED;
+    await order.save();
+
+    await OrderStatusHistory.create({
+      createdBy: null,
+      fromPaymentStatus,
+      fromStatus,
+      note: 'Order expired automatically because payment was not completed in time',
+      orderId: order._id,
+      toPaymentStatus: order.paymentStatus,
+      toStatus: order.status,
+    });
+
+    expiredOrders.push({
+      orderId: order._id.toString(),
+      status: order.status,
+    });
+  }
+
+  return expiredOrders;
+};
+
 const getStatus = async (req, res) => {
   return sendSuccess(res, getStatusData(), 'Orders module ready');
 };
@@ -972,6 +1067,7 @@ export {
   buildAppliedPromotionSnapshots,
   calculateTotals,
   createCheckoutOrder,
+  expireStaleUnpaidOrders,
   getAdminOrder,
   getCustomerOrder,
   getStatus,
@@ -985,6 +1081,7 @@ export default {
   buildAppliedPromotionSnapshots,
   calculateTotals,
   createCheckoutOrder,
+  expireStaleUnpaidOrders,
   getAdminOrder,
   getCustomerOrder,
   getStatus,

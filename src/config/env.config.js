@@ -12,9 +12,12 @@ export const apiPrefix = process.env.API_PREFIX || '/api';
 export const frontendUrl = process.env.FRONTEND_URL || '*';
 export const mongoUri = process.env.MONGO_URI || '';
 export const mongoDbName = process.env.MONGO_DB_NAME || 'ravenfold';
-export const redisUrl = process.env.REDIS_URL || '';
 export const jwtSecret = process.env.JWT_SECRET || '';
 export const jwtExpiresIn = process.env.JWT_EXPIRES_IN || '7d';
+export const authLoginThrottleMaxAttempts = Number(process.env.AUTH_LOGIN_THROTTLE_MAX_ATTEMPTS) || 5;
+export const authLoginThrottleWindowMs = Number(process.env.AUTH_LOGIN_THROTTLE_WINDOW_MS) || 900000;
+export const authLoginThrottleLockoutMs = Number(process.env.AUTH_LOGIN_THROTTLE_LOCKOUT_MS) || 1800000;
+export const passwordResetTokenTtlMs = Number(process.env.PASSWORD_RESET_TOKEN_TTL_MS) || 1800000;
 export const googleClientIds = (process.env.GOOGLE_CLIENT_IDS || process.env.GOOGLE_CLIENT_ID || '')
   .split(',')
   .map((clientId) => clientId.trim())
@@ -29,6 +32,14 @@ export const cloudinaryUploadFolder = process.env.CLOUDINARY_UPLOAD_FOLDER || 'r
 export const cloudinaryReviewUploadFolder = process.env.CLOUDINARY_REVIEW_UPLOAD_FOLDER || 'ravenfold/reviews';
 export const paymentDefaultProvider = process.env.PAYMENT_DEFAULT_PROVIDER || 'razorpay';
 export const promotionNewUserEligibilityDays = Number(process.env.PROMOTION_NEW_USER_ELIGIBILITY_DAYS) || 30;
+export const enablePaymentReconciliationJobs = String(process.env.ENABLE_PAYMENT_RECONCILIATION_JOBS || 'false').trim().toLowerCase() === 'true';
+export const paymentReconciliationIntervalMs = Number(process.env.PAYMENT_RECONCILIATION_INTERVAL_MS) || 300000;
+export const paymentReconciliationMinAgeMs = Number(process.env.PAYMENT_RECONCILIATION_MIN_AGE_MS) || 300000;
+export const paymentReconciliationBatchSize = Number(process.env.PAYMENT_RECONCILIATION_BATCH_SIZE) || 25;
+export const enableUnpaidOrderExpiryJobs = String(process.env.ENABLE_UNPAID_ORDER_EXPIRY_JOBS || 'false').trim().toLowerCase() === 'true';
+export const unpaidOrderExpiryIntervalMs = Number(process.env.UNPAID_ORDER_EXPIRY_INTERVAL_MS) || 900000;
+export const unpaidOrderExpiryMinutes = Number(process.env.UNPAID_ORDER_EXPIRY_MINUTES) || 30;
+export const unpaidOrderExpiryBatchSize = Number(process.env.UNPAID_ORDER_EXPIRY_BATCH_SIZE) || 25;
 export const enableReviewReminderJobs = String(process.env.ENABLE_REVIEW_REMINDER_JOBS || 'false').trim().toLowerCase() === 'true';
 export const reviewReminderDelayDays = Number(process.env.REVIEW_REMINDER_DELAY_DAYS) || 3;
 export const reviewReminderJobIntervalMs = Number(process.env.REVIEW_REMINDER_JOB_INTERVAL_MS) || 3600000;
@@ -41,23 +52,23 @@ export const shiprocketPassword = process.env.SHIPROCKET_PASSWORD || '';
 export const shiprocketBaseUrl = process.env.SHIPROCKET_BASE_URL || 'https://apiv2.shiprocket.in/v1/external';
 export const shiprocketPickupLocation = process.env.SHIPROCKET_PICKUP_LOCATION || '';
 export const shiprocketWebhookSecret = process.env.SHIPROCKET_WEBHOOK_SECRET || '';
-export const juspayApiKey = process.env.JUSPAY_API_KEY || '';
-export const juspayBaseUrl = process.env.JUSPAY_BASE_URL || 'https://api.juspay.in';
-export const juspayMerchantId = process.env.JUSPAY_MERCHANT_ID || '';
-export const juspayResponseKey = process.env.JUSPAY_RESPONSE_KEY || '';
-export const juspayWebhookSecret = process.env.JUSPAY_WEBHOOK_SECRET || '';
 export const delhiveryBaseUrl = process.env.DELHIVERY_BASE_URL || 'https://track.delhivery.com';
 export const delhiveryToken = process.env.DELHIVERY_TOKEN || '';
 export const delhiveryPickupLocation = process.env.DELHIVERY_PICKUP_LOCATION || '';
 
 export default {
   apiPrefix,
+  authLoginThrottleLockoutMs,
+  authLoginThrottleMaxAttempts,
+  authLoginThrottleWindowMs,
   cloudinaryApiKey,
   cloudinaryApiSecret,
   cloudinaryCloudName,
   cloudinaryReviewUploadFolder,
   cloudinaryUploadFolder,
+  enablePaymentReconciliationJobs,
   enableReviewReminderJobs,
+  enableUnpaidOrderExpiryJobs,
   facebookAppId,
   facebookAppSecret,
   facebookGraphVersion,
@@ -65,18 +76,16 @@ export default {
   googleClientIds,
   jwtExpiresIn,
   jwtSecret,
-  juspayApiKey,
-  juspayBaseUrl,
-  juspayMerchantId,
-  juspayResponseKey,
-  juspayWebhookSecret,
   mongoDbName,
   mongoUri,
   nodeEnv,
+  passwordResetTokenTtlMs,
   paymentDefaultProvider,
+  paymentReconciliationBatchSize,
+  paymentReconciliationIntervalMs,
+  paymentReconciliationMinAgeMs,
   port,
   promotionNewUserEligibilityDays,
-  redisUrl,
   reviewReminderBatchSize,
   reviewReminderDelayDays,
   reviewReminderEmailMode,
@@ -91,4 +100,7 @@ export default {
   shiprocketPickupLocation,
   shiprocketWebhookSecret,
   shippingDefaultProvider,
+  unpaidOrderExpiryBatchSize,
+  unpaidOrderExpiryIntervalMs,
+  unpaidOrderExpiryMinutes,
 };

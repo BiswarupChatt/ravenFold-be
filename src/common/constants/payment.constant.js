@@ -1,5 +1,4 @@
 const PAYMENT_PROVIDER = Object.freeze({
-  JUSPAY: 'juspay',
   RAZORPAY: 'razorpay',
 });
 

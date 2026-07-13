@@ -9,6 +9,9 @@ import {
 
 const registerFields = ['email', 'password', 'name', 'phone', 'role'];
 const loginFields = ['email', 'password'];
+const changePasswordFields = ['currentPassword', 'newPassword'];
+const requestPasswordResetFields = ['email'];
+const resetPasswordFields = ['token', 'newPassword'];
 const googleFields = ['accessToken', 'token', 'idToken', 'credential'];
 const facebookFields = ['accessToken', 'token'];
 
@@ -32,6 +35,36 @@ const loginSchema = createSchema((value) => {
   return pickAllowedKeys(payload, loginFields);
 });
 
+const changePasswordSchema = createSchema((value) => {
+  const payload = expectObject(value);
+
+  assertNoUnknownKeys(payload, changePasswordFields);
+  assertRequiredKeys(payload, changePasswordFields);
+  changePasswordFields.forEach((field) => assertStringLikeField(payload, field));
+
+  return pickAllowedKeys(payload, changePasswordFields);
+});
+
+const requestPasswordResetSchema = createSchema((value) => {
+  const payload = expectObject(value);
+
+  assertNoUnknownKeys(payload, requestPasswordResetFields);
+  assertRequiredKeys(payload, requestPasswordResetFields);
+  requestPasswordResetFields.forEach((field) => assertStringLikeField(payload, field));
+
+  return pickAllowedKeys(payload, requestPasswordResetFields);
+});
+
+const resetPasswordSchema = createSchema((value) => {
+  const payload = expectObject(value);
+
+  assertNoUnknownKeys(payload, resetPasswordFields);
+  assertRequiredKeys(payload, resetPasswordFields);
+  resetPasswordFields.forEach((field) => assertStringLikeField(payload, field));
+
+  return pickAllowedKeys(payload, resetPasswordFields);
+});
+
 const googleAuthSchema = createSchema((value) => {
   const payload = expectObject(value);
 
@@ -51,8 +84,11 @@ const facebookAuthSchema = createSchema((value) => {
 });
 
 export {
+  changePasswordSchema,
   facebookAuthSchema,
   googleAuthSchema,
   loginSchema,
+  requestPasswordResetSchema,
   registerSchema,
+  resetPasswordSchema,
 };

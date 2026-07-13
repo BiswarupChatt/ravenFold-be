@@ -9,6 +9,8 @@ import { signToken } from '@/common/utils/jwt.util.js';
 import { hashPassword, verifyPassword } from '@/common/utils/password.util.js';
 import { verifyFacebookToken } from '@/modules/auth/providers/facebook.provider.js';
 import { verifyGoogleToken } from '@/modules/auth/providers/google.provider.js';
+import loginThrottleService from '@/modules/auth/services/login-throttle.service.js';
+import passwordResetService from '@/modules/auth/services/password-reset.service.js';
 import { formatUserProfile, getCurrentUserProfile } from '@/modules/users/services/user.service.js';
 
 const allowedRoles = Object.values(ROLES);
@@ -27,6 +29,15 @@ const normalizeText = (value) => {
   return typeof value === 'string' ? value.trim() : '';
 };
 
+const extractRequestContext = (req = {}) => {
+  const forwardedFor = String(req.headers?.['x-forwarded-for'] || '').split(',')[0]?.trim();
+
+  return {
+    ipAddress: forwardedFor || req.ip || req.socket?.remoteAddress || '',
+    userAgent: String(req.headers?.['user-agent'] || '').trim(),
+  };
+};
+
 const assertValidEmail = (email) => {
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     throw new ApiError(400, 'A valid email is required');
@@ -34,8 +45,14 @@ const assertValidEmail = (email) => {
 };
 
 const assertValidPassword = (password) => {
-  if (typeof password !== 'string' || password.length < 8) {
+  const normalizedPassword = typeof password === 'string' ? password : '';
+
+  if (normalizedPassword.length < 8) {
     throw new ApiError(400, 'Password must be at least 8 characters long');
+  }
+
+  if (!/[a-z]/.test(normalizedPassword) || !/[A-Z]/.test(normalizedPassword) || !/\d/.test(normalizedPassword)) {
+    throw new ApiError(400, 'Password must include uppercase, lowercase, and numeric characters');
   }
 };
 
@@ -86,6 +103,17 @@ const findUserByEmail = async (email, options = {}) => {
   assertDatabaseReady();
 
   const query = User.findOne({ email: normalizeEmail(email) });
+
+  if (options.includePassword) {
+    query.select('+passwordHash');
+  }
+
+  return query.exec();
+};
+
+const findUserById = async (userId, options = {}) => {
+  assertDatabaseReady();
+  const query = User.findById(userId);
 
   if (options.includePassword) {
     query.select('+passwordHash');
@@ -189,7 +217,7 @@ const registerUser = async (payload) => {
   return createAuthResponse(user);
 };
 
-const loginUser = async (payload) => {
+const loginUser = async (payload, requestContext = {}) => {
   const email = normalizeEmail(payload?.email);
   const password = payload?.password;
 
@@ -197,12 +225,31 @@ const loginUser = async (payload) => {
     throw new ApiError(400, 'Email and password are required');
   }
 
+  await loginThrottleService.assertLoginAllowed({
+    email,
+    ipAddress: requestContext.ipAddress,
+  });
+
   const user = await findUserByEmail(email, { includePassword: true });
+
+  if (user?.isActive === false) {
+    throw new ApiError(403, 'This account is inactive');
+  }
+
   const passwordMatches = user ? await verifyPassword(password, user.passwordHash) : false;
 
   if (!passwordMatches) {
+    await loginThrottleService.recordLoginFailure({
+      email,
+      ipAddress: requestContext.ipAddress,
+    });
     throw new ApiError(401, 'Invalid email or password');
   }
+
+  await loginThrottleService.clearLoginThrottle({
+    email,
+    ipAddress: requestContext.ipAddress,
+  });
 
   return createAuthResponse(user);
 };
@@ -219,8 +266,8 @@ const assertAdminAuthResponse = (authResponse) => {
   return authResponse;
 };
 
-const loginAdminUser = async (payload) => {
-  return assertAdminAuthResponse(await loginUser(payload));
+const loginAdminUser = async (payload, requestContext = {}) => {
+  return assertAdminAuthResponse(await loginUser(payload, requestContext));
 };
 
 const verifyOtpPayload = async (payload) => {
@@ -284,6 +331,90 @@ const getAuthenticatedUser = (user) => {
   };
 };
 
+const changePasswordForUser = async (actor, payload = {}) => {
+  const authenticatedUser = getAuthenticatedUser(actor);
+  const currentPassword = payload?.currentPassword;
+  const newPassword = payload?.newPassword;
+  const user = await findUserById(authenticatedUser.id, { includePassword: true });
+
+  if (!user) {
+    throw new ApiError(404, 'User not found');
+  }
+
+  if (!user.passwordHash) {
+    throw new ApiError(409, 'Password change is not available for this account');
+  }
+
+  if (!await verifyPassword(currentPassword, user.passwordHash)) {
+    throw new ApiError(401, 'Current password is incorrect');
+  }
+
+  assertValidPassword(newPassword);
+
+  if (currentPassword === newPassword) {
+    throw new ApiError(400, 'New password must be different from the current password');
+  }
+
+  user.passwordHash = await hashPassword(newPassword);
+  await user.save();
+  await passwordResetService.invalidateUserPasswordResetTokens(user._id);
+
+  return {
+    success: true,
+  };
+};
+
+const requestPasswordResetForEmail = async (payload = {}, requestContext = {}) => {
+  const email = normalizeEmail(payload?.email);
+
+  assertValidEmail(email);
+
+  const user = await findUserByEmail(email, { includePassword: true });
+  let resetToken = '';
+
+  if (user?.passwordHash && user.isActive !== false) {
+    resetToken = await passwordResetService.createPasswordResetToken(user, requestContext);
+  }
+
+  return {
+    delivery: 'log',
+    message: 'If the account exists, password reset instructions have been generated.',
+    ...(nodeEnv === 'production' || !resetToken ? {} : { resetToken }),
+  };
+};
+
+const resetPasswordWithToken = async (payload = {}) => {
+  const token = normalizeText(payload?.token);
+  const newPassword = payload?.newPassword;
+
+  if (!token) {
+    throw new ApiError(400, 'Reset token is required');
+  }
+
+  assertValidPassword(newPassword);
+
+  const resetRecord = await passwordResetService.findValidPasswordResetToken(token);
+
+  if (!resetRecord) {
+    throw new ApiError(400, 'Password reset token is invalid or expired');
+  }
+
+  const user = await findUserById(resetRecord.userId, { includePassword: true });
+
+  if (!user || user.isActive === false) {
+    throw new ApiError(404, 'User not found');
+  }
+
+  user.passwordHash = await hashPassword(newPassword);
+  await user.save();
+  await passwordResetService.consumePasswordResetToken(resetRecord);
+  await passwordResetService.invalidateUserPasswordResetTokens(user._id);
+
+  return {
+    success: true,
+  };
+};
+
 const getStatus = async (req, res) => {
   return sendSuccess(res, getStatusData(), 'Auth module ready');
 };
@@ -293,11 +424,23 @@ const register = async (req, res) => {
 };
 
 const login = async (req, res) => {
-  return sendSuccess(res, await loginUser(req.body), 'Login successful');
+  return sendSuccess(res, await loginUser(req.body, extractRequestContext(req)), 'Login successful');
 };
 
 const loginAdmin = async (req, res) => {
-  return sendSuccess(res, await loginAdminUser(req.body), 'Admin login successful');
+  return sendSuccess(res, await loginAdminUser(req.body, extractRequestContext(req)), 'Admin login successful');
+};
+
+const requestPasswordReset = async (req, res) => {
+  return sendSuccess(
+    res,
+    await requestPasswordResetForEmail(req.body, extractRequestContext(req)),
+    'Password reset request accepted',
+  );
+};
+
+const resetPassword = async (req, res) => {
+  return sendSuccess(res, await resetPasswordWithToken(req.body), 'Password reset successful');
 };
 
 const verifyOtp = async (req, res) => {
@@ -320,8 +463,14 @@ const getMe = async (req, res) => {
   return sendSuccess(res, await getCurrentUserProfile(req.user), 'Authenticated user fetched');
 };
 
+const changePassword = async (req, res) => {
+  return sendSuccess(res, await changePasswordForUser(req.user, req.body), 'Password updated successfully');
+};
+
 export {
   authenticateProviderUser,
+  changePassword,
+  changePasswordForUser,
   facebookAuth,
   getAuthenticatedUser,
   getMe,
@@ -331,14 +480,19 @@ export {
   loginAdmin,
   loginAdminUser,
   loginUser,
+  requestPasswordReset,
+  requestPasswordResetForEmail,
   register,
   registerUser,
+  resetPassword,
+  resetPasswordWithToken,
   verifyOtp,
   verifyOtpPayload,
 };
 
 export default {
   authenticateProviderUser,
+  changePassword,
   facebookAuth,
   getAuthenticatedUser,
   getMe,
@@ -348,8 +502,10 @@ export default {
   loginAdmin,
   loginAdminUser,
   loginUser,
+  requestPasswordReset,
   register,
   registerUser,
+  resetPassword,
   verifyOtp,
   verifyOtpPayload,
 };

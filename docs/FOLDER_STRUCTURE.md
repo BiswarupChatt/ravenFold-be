@@ -63,9 +63,9 @@ router.use('/cart', cartRoutes);
 router.use('/wishlist', wishlistRoutes);
 router.use('/orders', orderRoutes);
 router.use('/payments', paymentRoutes);
+router.use('/promotions', promotionRoutes);
 router.use('/shipping', shippingRoutes);
 router.use('/reviews', reviewRoutes);
-router.use('/coupons', couponRoutes);
 router.use('/analytics', analyticsRoutes);
 router.use('/admin', adminRoutes);
 ```

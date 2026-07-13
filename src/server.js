@@ -3,11 +3,9 @@ import { startBackgroundJobs, stopBackgroundJobs } from '@/background-jobs.js';
 import { nodeEnv, port } from '@/config/env.config.js';
 import logger from '@/common/logger/logger.js';
 import { connectMongoDB, disconnectMongoDB } from '@/infrastructure/database/mongodb.js';
-import { connectRedis, disconnectRedis } from '@/infrastructure/redis/redis.js';
 
 const startServer = async () => {
   await connectMongoDB();
-  await connectRedis();
   startBackgroundJobs();
 
   const server = app.listen(port, () => {
@@ -19,7 +17,6 @@ const startServer = async () => {
 
     server.close(async () => {
       stopBackgroundJobs();
-      await disconnectRedis();
       await disconnectMongoDB();
       logger.info('Server closed.');
       process.exit(0);

@@ -1,10 +1,8 @@
 import ApiError from '@/common/errors/api.error.js';
 import { PAYMENT_PROVIDER } from '@/common/constants/payment.constant.js';
-import juspayProvider from '@/modules/payment/providers/juspay.provider.js';
 import razorpayProvider from '@/modules/payment/providers/razorpay.provider.js';
 
 const providers = {
-  [PAYMENT_PROVIDER.JUSPAY]: juspayProvider,
   [PAYMENT_PROVIDER.RAZORPAY]: razorpayProvider,
 };
 

@@ -66,7 +66,6 @@ This project already has webhook and manual-sync paths for some flows. The jobs 
 - Relevant code:
   - `src/modules/payment/services/payment.service.js`
   - `src/modules/payment/providers/razorpay.provider.js`
-  - `src/modules/payment/providers/juspay.provider.js`
   - `src/modules/payment/routes/payment.routes.js`
 - Suggested trigger:
   - `ENABLE_PAYMENT_RECONCILIATION_JOBS=true`

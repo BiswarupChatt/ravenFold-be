@@ -1,8 +1,12 @@
+import unpaidOrderExpiryJob from '@/modules/order/services/unpaid-order-expiry.job.js';
+import paymentReconciliationJob from '@/modules/payment/services/payment-reconciliation.job.js';
 import reviewReminderJob from '@/modules/review/services/review-reminder.job.js';
 
 const stopHandlers = [];
 
 const startBackgroundJobs = () => {
+  stopHandlers.push(unpaidOrderExpiryJob.startUnpaidOrderExpiryJob());
+  stopHandlers.push(paymentReconciliationJob.startPaymentReconciliationJob());
   stopHandlers.push(reviewReminderJob.startReviewReminderJob());
 };
 
