@@ -28,9 +28,9 @@ const bankDetailsSchema = new mongoose.Schema(
 
 const signatorySchema = new mongoose.Schema(
   {
-    designation: { type: String, trim: true, default: '' },
+    designation: { type: String, trim: true, default: 'Authorised Signatory' },
     imageUrl: { type: String, trim: true, default: '' },
-    name: { type: String, trim: true, default: '' },
+    name: { type: String, trim: true, default: 'Aurax & Co' },
   },
   { _id: false },
 );
@@ -52,7 +52,7 @@ const gstConfigurationSchema = new mongoose.Schema(
     contactNumber: { type: String, trim: true, default: '' },
     email: { type: String, trim: true, lowercase: true, default: '' },
     invoicePrefix: { type: String, trim: true, uppercase: true, default: 'RF' },
-    invoiceNumberFormat: { type: String, trim: true, default: '{PREFIX}/{FY}/{SEQ}' },
+    invoiceNumberFormat: { type: String, trim: true, default: 'RF{FY}{Q}{SEQ}' },
     nextInvoiceNumber: { type: Number, min: 1, default: 1 },
     useFinancialYearNumbering: { type: Boolean, default: true },
     defaultGstRate: { type: Number, min: 0, default: 0 },

@@ -16,9 +16,9 @@ import {
 
 const defaultConfig = {
   authorisedSignatory: {
-    designation: '',
+    designation: 'Authorised Signatory',
     imageUrl: '',
-    name: '',
+    name: 'Aurax & Co',
   },
   bankDetails: {
     accountName: '',
@@ -35,7 +35,7 @@ const defaultConfig = {
   email: '',
   gstin: '',
   invoiceNotes: '',
-  invoiceNumberFormat: '{PREFIX}/{FY}/{SEQ}',
+  invoiceNumberFormat: 'RF{FY}{Q}{SEQ}',
   invoicePrefix: 'RF',
   invoiceTerms: '',
   nextInvoiceNumber: 1,

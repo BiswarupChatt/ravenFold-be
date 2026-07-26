@@ -24,6 +24,9 @@ import Order from '@/modules/order/models/order.model.js';
 import User from '@/modules/users/models/user.model.js';
 import { getPagination } from '@/common/utils/pagination.util.js';
 
+const FIXED_INVOICE_PREFIX = 'RF';
+const INVOICE_SEQUENCE_WIDTH = 5;
+
 const getActorId = (actor = null) => actor?.id || null;
 
 const formatAddress = (address = {}) => ({
@@ -64,21 +67,43 @@ const formatInvoice = (invoice = {}) => ({
   userId: getDocumentId(invoice.userId),
 });
 
-const buildInvoiceNumber = ({ config, financialYear, sequence }) => {
-  const prefix = normalizeText(config.invoicePrefix).toUpperCase() || 'RF';
-  const sequenceText = String(sequence).padStart(6, '0');
-  const format = normalizeText(config.invoiceNumberFormat) || '{PREFIX}/{FY}/{SEQ}';
+const getFinancialYearCode = (financialYear = '') => {
+  const parts = normalizeText(financialYear).split('-');
+  const startYear = parts[0] || '';
+  const endYear = parts[1] || '';
 
-  return format
-    .replaceAll('{PREFIX}', prefix)
-    .replaceAll('{FY}', financialYear)
-    .replaceAll('{SEQ}', sequenceText)
-    .toUpperCase();
+  return `${startYear.slice(-2)}${endYear.slice(-2)}`;
+};
+
+const getFinancialQuarter = (date = new Date()) => {
+  const month = new Date(date).getMonth() + 1;
+
+  if (month >= 4 && month <= 6) {
+    return 1;
+  }
+
+  if (month >= 7 && month <= 9) {
+    return 2;
+  }
+
+  if (month >= 10 && month <= 12) {
+    return 3;
+  }
+
+  return 4;
+};
+
+const buildInvoiceNumber = ({ date = new Date(), financialYear, sequence }) => {
+  const yearCode = getFinancialYearCode(financialYear);
+  const quarter = getFinancialQuarter(date);
+  const sequenceText = String(sequence).padStart(INVOICE_SEQUENCE_WIDTH, '0');
+
+  return `${FIXED_INVOICE_PREFIX}${yearCode}${quarter}${sequenceText}`;
 };
 
 const reserveInvoiceNumber = async (config, date = new Date()) => {
-  const financialYear = config.useFinancialYearNumbering === false ? 'all' : getFinancialYear(date);
-  const prefix = normalizeText(config.invoicePrefix).toUpperCase() || 'RF';
+  const financialYear = getFinancialYear(date);
+  const prefix = FIXED_INVOICE_PREFIX;
   const startingSequence = Math.max(Number(config.nextInvoiceNumber || 1) - 1, 0);
 
   try {
@@ -115,7 +140,7 @@ const reserveInvoiceNumber = async (config, date = new Date()) => {
   return {
     financialYear,
     invoiceNumber: buildInvoiceNumber({
-      config,
+      date,
       financialYear,
       sequence: counter.sequence,
     }),
