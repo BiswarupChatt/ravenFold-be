@@ -351,33 +351,6 @@ const generateInvoiceForOrder = async (orderId, actor = null) => {
   }
 };
 
-const regenerateInvoicePdf = async (actor, invoiceId) => {
-  assertDatabaseReady();
-  const normalizedInvoiceId = normalizeObjectId(invoiceId, 'invoice id');
-  const invoice = await Invoice.findById(normalizedInvoiceId).exec();
-
-  if (!invoice) {
-    throw new ApiError(404, 'Invoice not found');
-  }
-
-  renderInvoicePdf(invoice);
-  invoice.status = INVOICE_STATUS.GENERATED;
-  invoice.generationError = '';
-  await invoice.save();
-
-  await GstActivityLog.create({
-    action: 'invoice.pdf_regenerated',
-    actorId: getActorId(actor),
-    entityId: invoice._id,
-    entityType: 'Invoice',
-    metadata: {
-      invoiceNumber: invoice.invoiceNumber,
-    },
-  });
-
-  return formatInvoice(invoice);
-};
-
 const buildInvoiceFilter = (query = {}) => {
   const filter = {};
   const invoiceType = normalizeText(query.invoiceType).toLowerCase();
@@ -626,7 +599,6 @@ export {
   getAdminInvoice,
   getInvoiceByOrderForCustomer,
   listAdminInvoices,
-  regenerateInvoicePdf,
 };
 
 export default {
@@ -639,5 +611,4 @@ export default {
   getAdminInvoice,
   getInvoiceByOrderForCustomer,
   listAdminInvoices,
-  regenerateInvoicePdf,
 };

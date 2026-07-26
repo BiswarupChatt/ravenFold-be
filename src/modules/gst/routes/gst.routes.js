@@ -35,7 +35,6 @@ router.get('/admin/invoices', authenticateUser, adminMiddleware, asyncHandler(gs
 router.get('/admin/invoices/export', authenticateUser, adminMiddleware, asyncHandler(gstController.exportGstReport));
 router.get('/admin/invoices/:invoiceId', authenticateUser, adminMiddleware, asyncHandler(gstController.getAdminInvoice));
 router.get('/admin/invoices/:invoiceId/download', authenticateUser, adminMiddleware, asyncHandler(gstController.downloadAdminInvoice));
-router.post('/admin/invoices/:invoiceId/regenerate-pdf', authenticateUser, adminMiddleware, asyncHandler(gstController.regenerateInvoicePdf));
 router.post(
   '/admin/credit-notes',
   authenticateUser,

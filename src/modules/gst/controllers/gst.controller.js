@@ -2,8 +2,10 @@ import { sendSuccess } from '@/common/helpers/response.helper.js';
 import gstConfigurationService from '@/modules/gst/services/gst-configuration.service.js';
 import gstInvoiceService from '@/modules/gst/services/gst-invoice.service.js';
 import {
+  getStateCodeFromState,
   normalizeGstin,
   normalizeStateCode,
+  normalizeStateName,
   validateGstinWithState,
 } from '@/modules/gst/services/gst-validation.service.js';
 
@@ -27,13 +29,16 @@ const updateGstConfiguration = async (req, res) => sendSuccess(
 );
 
 const validateCheckoutGstDetails = async (req, res) => {
+  const state = normalizeStateName(req.body.state, 'state', { required: true });
+  const stateCode = getStateCodeFromState(state, 'state', { required: true });
   const result = validateGstinWithState({
     gstin: req.body.gstin,
-    stateCode: req.body.stateCode,
+    stateCode,
   });
 
   return sendSuccess(res, {
     gstin: normalizeGstin(result.gstin),
+    state,
     stateCode: normalizeStateCode(result.stateCode),
     valid: true,
   }, 'GST details are valid');
@@ -67,12 +72,6 @@ const downloadAdminInvoice = async (req, res) => sendInvoicePdf(
   await gstInvoiceService.downloadAdminInvoice(req.params.invoiceId),
 );
 
-const regenerateInvoicePdf = async (req, res) => sendSuccess(
-  res,
-  await gstInvoiceService.regenerateInvoicePdf(req.user, req.params.invoiceId),
-  'Invoice PDF regenerated',
-);
-
 const exportGstReport = async (req, res) => {
   const csv = await gstInvoiceService.exportGstReportCsv(req.query);
 
@@ -98,7 +97,6 @@ export {
   getCustomerInvoice,
   getGstConfiguration,
   listAdminInvoices,
-  regenerateInvoicePdf,
   updateGstConfiguration,
   validateCheckoutGstDetails,
 };
@@ -112,7 +110,6 @@ export default {
   getCustomerInvoice,
   getGstConfiguration,
   listAdminInvoices,
-  regenerateInvoicePdf,
   updateGstConfiguration,
   validateCheckoutGstDetails,
 };
