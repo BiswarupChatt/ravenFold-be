@@ -1,3 +1,5 @@
+import { GST_STATE_OPTIONS } from '@/modules/gst/gst.constants.js';
+
 const PAGE_WIDTH = 595;
 const PAGE_HEIGHT = 842;
 const MARGIN = 32;
@@ -177,6 +179,14 @@ const getAddressLines = (address = {}) => [
   [address.city, address.state, address.pincode].filter(Boolean).join(', '),
   address.country,
 ].filter(Boolean);
+
+const getAddressStateCode = (address = {}) => {
+  if (address.stateCode) {
+    return address.stateCode;
+  }
+
+  return GST_STATE_OPTIONS.find((state) => state.name.toLowerCase() === String(address.state || '').toLowerCase())?.code || '';
+};
 
 class PdfCanvas {
   constructor() {
@@ -406,12 +416,14 @@ const drawParties = (pdf, invoice, y) => {
   sectionEnds.push(drawPartySection(pdf, 'Seller', [
     seller.businessLegalName || 'Aurax & Co',
     ...getAddressLines(sellerAddress).filter((line) => line !== sellerAddress.fullName),
+    getAddressStateCode(sellerAddress) ? `State Code: ${getAddressStateCode(sellerAddress)}` : '',
     seller.gstin ? `GSTIN: ${seller.gstin}` : '',
     seller.pan ? `PAN: ${seller.pan}` : '',
   ], THREE_COLUMN_X[0], y, THREE_COLUMN_WIDTH));
   sectionEnds.push(drawPartySection(pdf, 'Bill To', [
     getPartyName(customer, 'Customer'),
     ...getAddressLines(billingAddress).filter((line) => line !== billingAddress.fullName),
+    getAddressStateCode(billingAddress) ? `State Code: ${getAddressStateCode(billingAddress)}` : '',
     customer.contactNumber ? `Mobile: ${customer.contactNumber}` : '',
     customer.email ? `Email: ${customer.email}` : '',
     customer.gstin ? `GSTIN: ${customer.gstin}` : '',

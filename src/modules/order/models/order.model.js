@@ -113,6 +113,8 @@ const customerGstDetailsSchema = new mongoose.Schema(
     contactNumber: { type: String, trim: true, default: '' },
     email: { type: String, trim: true, default: '' },
     gstin: { type: String, trim: true, uppercase: true, default: '' },
+    state: { type: String, trim: true, default: '' },
+    stateCode: { type: String, trim: true, default: '' },
     tradeName: { type: String, trim: true, default: '' },
   },
   { _id: false },

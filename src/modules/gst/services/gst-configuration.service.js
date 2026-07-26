@@ -9,9 +9,11 @@ import { SHIPPING_GST_TREATMENTS } from '@/modules/gst/gst.constants.js';
 import GstActivityLog from '@/modules/gst/models/gst-activity-log.model.js';
 import GstConfiguration from '@/modules/gst/models/gst-configuration.model.js';
 import {
+  getStateCodeFromState,
   normalizeGstin,
   normalizeRate,
   normalizeStateCode,
+  normalizeStateName,
 } from '@/modules/gst/services/gst-validation.service.js';
 
 const defaultConfig = {
@@ -85,14 +87,22 @@ const getGstConfiguration = async () => {
 const normalizeAddress = (value = {}) => {
   const address = {};
 
-  ['addressLine1', 'addressLine2', 'city', 'country', 'pincode', 'state'].forEach((field) => {
+  ['addressLine1', 'addressLine2', 'city', 'country', 'pincode'].forEach((field) => {
     if (hasOwn(value, field)) {
       address[field] = normalizeText(value[field]);
     }
   });
 
+  if (hasOwn(value, 'state')) {
+    address.state = normalizeStateName(value.state);
+  }
+
   if (hasOwn(value, 'stateCode')) {
     address.stateCode = normalizeStateCode(value.stateCode);
+  }
+
+  if (!address.stateCode && address.state) {
+    address.stateCode = getStateCodeFromState(address.state);
   }
 
   return address;

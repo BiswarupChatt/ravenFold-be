@@ -41,8 +41,10 @@ import { calculateOrderGst } from '@/modules/gst/services/gst-calculation.servic
 import gstConfigurationService from '@/modules/gst/services/gst-configuration.service.js';
 import gstInvoiceService from '@/modules/gst/services/gst-invoice.service.js';
 import {
+  getStateCodeFromState,
   normalizeGstin,
   normalizeStateCode,
+  normalizeStateName,
   validateGstinWithState,
 } from '@/modules/gst/services/gst-validation.service.js';
 
@@ -144,7 +146,9 @@ const normalizeAddressSnapshot = (address = {}, field = 'address') => {
 
   snapshot.addressLine2 = normalizeText(address.addressLine2);
   snapshot.addressType = normalizeText(address.addressType) || 'home';
-  snapshot.stateCode = address.stateCode ? normalizeStateCode(address.stateCode, `${field}.stateCode`) : '';
+  snapshot.stateCode = address.stateCode
+    ? normalizeStateCode(address.stateCode, `${field}.stateCode`)
+    : getStateCodeFromState(snapshot.state, `${field}.state`);
 
   if (!['home', 'work'].includes(snapshot.addressType)) {
     throw new ApiError(400, `${field}.addressType must be either home or work`);
@@ -167,7 +171,8 @@ const normalizeCheckoutGstDetails = (payload = {}) => {
   }
 
   const gstin = normalizeGstin(payload.gstin, 'gstDetails.gstin', { required: true });
-  const stateCode = normalizeStateCode(payload.stateCode, 'gstDetails.stateCode', { required: true });
+  const state = normalizeStateName(payload.state, 'gstDetails.state', { required: true });
+  const stateCode = getStateCodeFromState(state, 'gstDetails.state', { required: true });
 
   validateGstinWithState({ gstin, stateCode });
 
@@ -182,6 +187,7 @@ const normalizeCheckoutGstDetails = (payload = {}) => {
     contactNumber: normalizeText(payload.contactNumber),
     email: normalizeText(payload.email),
     gstin,
+    state,
     stateCode,
     tradeName: normalizeText(payload.tradeName),
   };
@@ -956,6 +962,8 @@ const createCheckoutOrder = async (actor, payload = {}) => {
         contactNumber: gstDetails.contactNumber,
         email: gstDetails.email,
         gstin: gstDetails.gstin,
+        state: gstDetails.state,
+        stateCode: gstDetails.stateCode,
         tradeName: gstDetails.tradeName,
       } : {},
       customerGstin: gstDetails?.gstin || '',

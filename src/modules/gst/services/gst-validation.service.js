@@ -1,6 +1,6 @@
 import ApiError from '@/common/errors/api.error.js';
 import { normalizeText } from '@/common/utils/service.util.js';
-import { GST_STATE_CODES } from '@/modules/gst/gst.constants.js';
+import { GST_STATE_CODES, GST_STATE_OPTIONS } from '@/modules/gst/gst.constants.js';
 
 const GSTIN_PATTERN = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/;
 const HSN_PATTERN = /^\d{4}(\d{2})?(\d{2})?$/;
@@ -17,6 +17,38 @@ const normalizeStateCode = (value, field = 'stateCode', { required = false } = {
   }
 
   return stateCode;
+};
+
+const normalizeStateName = (value, field = 'state', { required = false } = {}) => {
+  const state = normalizeText(value);
+
+  if (!state && !required) {
+    return '';
+  }
+
+  const matchedState = GST_STATE_OPTIONS.find((option) => option.name.toLowerCase() === state.toLowerCase());
+
+  if (!matchedState) {
+    throw new ApiError(400, `${field} must be a valid Indian GST state`);
+  }
+
+  return matchedState.name;
+};
+
+const getStateCodeFromState = (value, field = 'state', { required = false } = {}) => {
+  const state = normalizeText(value);
+
+  if (!state && !required) {
+    return '';
+  }
+
+  const matchedState = GST_STATE_OPTIONS.find((option) => option.name.toLowerCase() === state.toLowerCase());
+
+  if (!matchedState) {
+    throw new ApiError(400, `${field} must be a valid Indian GST state`);
+  }
+
+  return matchedState.code;
 };
 
 const normalizeGstin = (value, field = 'gstin', { required = false } = {}) => {
@@ -92,10 +124,12 @@ const validateGstinWithState = ({ gstin = '', stateCode = '' } = {}) => {
 export {
   GSTIN_PATTERN,
   HSN_PATTERN,
+  getStateCodeFromState,
   normalizeGstin,
   normalizeHsnCode,
   normalizeRate,
   normalizeStateCode,
+  normalizeStateName,
   validateGstinWithState,
   validateRateBreakup,
 };
@@ -103,10 +137,12 @@ export {
 export default {
   GSTIN_PATTERN,
   HSN_PATTERN,
+  getStateCodeFromState,
   normalizeGstin,
   normalizeHsnCode,
   normalizeRate,
   normalizeStateCode,
+  normalizeStateName,
   validateGstinWithState,
   validateRateBreakup,
 };

@@ -107,7 +107,7 @@ const validateCheckoutGstDetailsSchema = createSchema((value) => {
   const payload = expectObject(value);
 
   assertNoUnknownKeys(payload, checkoutGstFields);
-  assertRequiredKeys(payload, ['gstin', 'businessName', 'stateCode']);
+  assertRequiredKeys(payload, ['gstin', 'businessName', 'state']);
   [
     'businessName',
     'city',
