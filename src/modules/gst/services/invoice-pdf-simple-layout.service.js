@@ -137,28 +137,31 @@ const estimateTextWidth = (text, size = 9, bold = false) => {
 };
 
 const wrapText = (text = '', maxWidth = 100, size = 9) => {
-  const words = String(text || '-').split(/\s+/).filter(Boolean);
   const lines = [];
-  let currentLine = '';
 
-  words.forEach((word) => {
-    const nextLine = currentLine ? `${currentLine} ${word}` : word;
+  String(text || '-').split(/\r?\n/).forEach((paragraph) => {
+    const words = paragraph.split(/\s+/).filter(Boolean);
+    let currentLine = '';
 
-    if (estimateTextWidth(nextLine, size) <= maxWidth) {
-      currentLine = nextLine;
-      return;
-    }
+    words.forEach((word) => {
+      const nextLine = currentLine ? `${currentLine} ${word}` : word;
+
+      if (estimateTextWidth(nextLine, size) <= maxWidth) {
+        currentLine = nextLine;
+        return;
+      }
+
+      if (currentLine) {
+        lines.push(currentLine);
+      }
+
+      currentLine = word;
+    });
 
     if (currentLine) {
       lines.push(currentLine);
     }
-
-    currentLine = word;
   });
-
-  if (currentLine) {
-    lines.push(currentLine);
-  }
 
   return lines.length ? lines : ['-'];
 };
@@ -670,7 +673,10 @@ const drawTotals = (pdf, invoice, y) => {
 const drawTermsAndSignatory = (pdf, invoice, y) => {
   const seller = invoice.sellerSnapshot || {};
   const signatory = seller.authorisedSignatory || {};
-  const terms = seller.invoiceTerms || seller.invoiceNotes || 'This is a computer generated tax invoice.';
+  const termsAndNotes = [
+    ['Notes:', seller.invoiceNotes],
+    ['Terms:', seller.invoiceTerms],
+  ].filter(([, value]) => value);
   const sectionGap = 32;
   const availableWidth = CONTENT_WIDTH - sectionGap;
   const termsWidth = (availableWidth * 2) / 3;
@@ -686,12 +692,43 @@ const drawTermsAndSignatory = (pdf, invoice, y) => {
   y = bottomY;
 
   drawSectionTitle(pdf, 'Terms and Notes', MARGIN, y, termsWidth);
-  pdf.wrappedText(terms, MARGIN, y + 20, termsWidth, {
-    color: THEME.muted,
-    lineHeight: 9,
-    maxLines: 4,
-    size: 7.2,
-  });
+  if (!termsAndNotes.length) {
+    pdf.wrappedText('This is a computer generated tax invoice.', MARGIN, y + 20, termsWidth, {
+      color: THEME.muted,
+      lineHeight: 9,
+      maxLines: 4,
+      size: 7.2,
+    });
+  } else {
+    let nextTextY = y + 20;
+    let remainingLines = 4;
+
+    termsAndNotes.forEach(([label, value]) => {
+      if (remainingLines <= 0) {
+        return;
+      }
+
+      const labelWidth = estimateTextWidth(label, 7.2, true) + 4;
+      const textX = MARGIN + labelWidth;
+      const lines = wrapText(value, termsWidth - labelWidth, 7.2).slice(0, remainingLines);
+
+      pdf.text(label, MARGIN, nextTextY, {
+        bold: true,
+        color: THEME.muted,
+        size: 7.2,
+      });
+
+      lines.forEach((line, index) => {
+        pdf.text(line, textX, nextTextY + (index * 9), {
+          color: THEME.muted,
+          size: 7.2,
+        });
+      });
+
+      nextTextY += lines.length * 9;
+      remainingLines -= lines.length;
+    });
+  }
 
   pdf.line(rightX, y + 7, rightX + signatoryWidth, y + 7, THEME.muted);
   pdf.text(signatory.name || seller.businessLegalName || '-', rightX, y + 24, {
