@@ -67,6 +67,43 @@ const productSnapshotSchema = new mongoose.Schema(
   },
 );
 
+const orderItemGstSnapshotSchema = new mongoose.Schema(
+  {
+    cessRate: { type: Number, min: 0, default: 0 },
+    cgstRate: { type: Number, min: 0, default: 0 },
+    exempt: { type: Boolean, default: false },
+    exemptionReason: { type: String, trim: true, default: '' },
+    gstRate: { type: Number, min: 0, default: 0 },
+    hsnCode: { type: String, trim: true, default: '' },
+    igstRate: { type: Number, min: 0, default: 0 },
+    pricingMode: { type: String, enum: ['inclusive', 'exclusive'], default: 'inclusive' },
+    sgstRate: { type: Number, min: 0, default: 0 },
+    taxInclusive: { type: Boolean, default: true },
+  },
+  {
+    _id: false,
+  },
+);
+
+const orderItemTaxSummarySchema = new mongoose.Schema(
+  {
+    cessAmount: { type: Number, min: 0, default: 0 },
+    cgstAmount: { type: Number, min: 0, default: 0 },
+    cgstRate: { type: Number, min: 0, default: 0 },
+    discountAmount: { type: Number, min: 0, default: 0 },
+    igstAmount: { type: Number, min: 0, default: 0 },
+    igstRate: { type: Number, min: 0, default: 0 },
+    lineTotal: { type: Number, min: 0, default: 0 },
+    sgstAmount: { type: Number, min: 0, default: 0 },
+    sgstRate: { type: Number, min: 0, default: 0 },
+    taxableValue: { type: Number, min: 0, default: 0 },
+    totalTax: { type: Number, min: 0, default: 0 },
+  },
+  {
+    _id: false,
+  },
+);
+
 const orderItemSchema = new mongoose.Schema(
   {
     orderId: {
@@ -110,6 +147,14 @@ const orderItemSchema = new mongoose.Schema(
       type: productSnapshotSchema,
       default: () => ({}),
     },
+    gstSnapshot: {
+      type: orderItemGstSnapshotSchema,
+      default: () => ({}),
+    },
+    taxSummary: {
+      type: orderItemTaxSummarySchema,
+      default: () => ({}),
+    },
   },
   {
     collection: 'order_items',
@@ -130,6 +175,12 @@ orderItemSchema.pre('validate', function validateOrderItem() {
 
 const OrderItem = mongoose.models.OrderItem || mongoose.model('OrderItem', orderItemSchema);
 
-export { orderItemSchema, priceSnapshotSchema, productSnapshotSchema };
+export {
+  orderItemGstSnapshotSchema,
+  orderItemSchema,
+  orderItemTaxSummarySchema,
+  priceSnapshotSchema,
+  productSnapshotSchema,
+};
 
 export default OrderItem;

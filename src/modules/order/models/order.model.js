@@ -2,6 +2,11 @@ import mongoose from 'mongoose';
 
 import { ORDER_STATUS, PAYMENT_STATUS } from '@/common/constants/order.constant.js';
 import { PAYMENT_METHOD, PAYMENT_PROVIDER } from '@/common/constants/payment.constant.js';
+import {
+  INVOICE_STATUS,
+  INVOICE_TYPES,
+  SUPPLY_TYPES,
+} from '@/modules/gst/gst.constants.js';
 
 const addressSnapshotSchema = new mongoose.Schema(
   {
@@ -34,6 +39,11 @@ const addressSnapshotSchema = new mongoose.Schema(
       type: String,
       required: true,
       trim: true,
+    },
+    stateCode: {
+      type: String,
+      trim: true,
+      default: '',
     },
     pincode: {
       type: String,
@@ -95,6 +105,35 @@ const appliedPromotionSnapshotSchema = new mongoose.Schema(
   {
     _id: false,
   },
+);
+
+const customerGstDetailsSchema = new mongoose.Schema(
+  {
+    businessName: { type: String, trim: true, default: '' },
+    contactNumber: { type: String, trim: true, default: '' },
+    email: { type: String, trim: true, default: '' },
+    gstin: { type: String, trim: true, uppercase: true, default: '' },
+    tradeName: { type: String, trim: true, default: '' },
+  },
+  { _id: false },
+);
+
+const sellerGstSnapshotSchema = new mongoose.Schema(
+  {
+    authorisedSignatory: { type: Object, default: () => ({}) },
+    bankDetails: { type: Object, default: () => ({}) },
+    businessLegalName: { type: String, trim: true, default: '' },
+    businessLogoUrl: { type: String, trim: true, default: '' },
+    contactNumber: { type: String, trim: true, default: '' },
+    email: { type: String, trim: true, default: '' },
+    gstin: { type: String, trim: true, uppercase: true, default: '' },
+    invoiceNotes: { type: String, trim: true, default: '' },
+    invoiceTerms: { type: String, trim: true, default: '' },
+    pan: { type: String, trim: true, uppercase: true, default: '' },
+    registeredAddress: { type: Object, default: () => ({}) },
+    tradeName: { type: String, trim: true, default: '' },
+  },
+  { _id: false },
 );
 
 const orderSchema = new mongoose.Schema(
@@ -238,6 +277,99 @@ const orderSchema = new mongoose.Schema(
       type: addressSnapshotSchema,
       required: true,
     },
+    invoiceType: {
+      type: String,
+      enum: Object.values(INVOICE_TYPES),
+      default: INVOICE_TYPES.B2C,
+      index: true,
+    },
+    customerGstin: {
+      type: String,
+      trim: true,
+      uppercase: true,
+      default: '',
+      index: true,
+    },
+    customerBusinessName: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+    customerGstDetails: {
+      type: customerGstDetailsSchema,
+      default: () => ({}),
+    },
+    placeOfSupply: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+    placeOfSupplyStateCode: {
+      type: String,
+      trim: true,
+      default: '',
+      index: true,
+    },
+    supplyType: {
+      type: String,
+      enum: [...Object.values(SUPPLY_TYPES), ''],
+      default: '',
+      index: true,
+    },
+    sellerGstSnapshot: {
+      type: sellerGstSnapshotSchema,
+      default: () => ({}),
+    },
+    shippingTaxSummary: {
+      type: Object,
+      default: () => ({}),
+    },
+    taxTotals: {
+      type: Object,
+      default: () => ({
+        discountTotal: 0,
+        grandTotal: 0,
+        roundOffAmount: 0,
+        totalCess: 0,
+        totalCgst: 0,
+        totalGst: 0,
+        totalIgst: 0,
+        totalSgst: 0,
+        totalTaxableValue: 0,
+      }),
+    },
+    invoiceNumber: {
+      type: String,
+      trim: true,
+      uppercase: true,
+      default: '',
+      index: true,
+    },
+    invoiceDate: {
+      type: Date,
+      default: null,
+    },
+    invoiceFinancialYear: {
+      type: String,
+      trim: true,
+      default: '',
+      index: true,
+    },
+    invoicePdfPath: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+    invoiceGenerationStatus: {
+      type: String,
+      enum: Object.values(INVOICE_STATUS),
+      default: INVOICE_STATUS.PENDING,
+    },
+    invoiceAdjustmentStatus: {
+      type: String,
+      trim: true,
+      default: '',
+    },
     appliedPromotions: {
       type: [appliedPromotionSnapshotSchema],
       default: [],
@@ -292,6 +424,12 @@ orderSchema.pre('validate', function validateOrderTotals() {
 
 const Order = mongoose.models.Order || mongoose.model('Order', orderSchema);
 
-export { addressSnapshotSchema, appliedPromotionSnapshotSchema, orderSchema };
+export {
+  addressSnapshotSchema,
+  appliedPromotionSnapshotSchema,
+  customerGstDetailsSchema,
+  orderSchema,
+  sellerGstSnapshotSchema,
+};
 
 export default Order;

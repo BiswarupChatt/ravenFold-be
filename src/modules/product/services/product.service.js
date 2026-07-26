@@ -20,6 +20,11 @@ import ProductOptionValue from '@/modules/product/models/product-option-value.mo
 import ProductOption from '@/modules/product/models/product-option.model.js';
 import ProductVariant from '@/modules/product/models/product-variant.model.js';
 import Product, { dimensionUnits, productStatuses, weightUnits } from '@/modules/product/models/product.model.js';
+import {
+  normalizeHsnCode,
+  normalizeRate,
+  validateRateBreakup,
+} from '@/modules/gst/services/gst-validation.service.js';
 
 const editableProductFields = [
   'name',
@@ -40,6 +45,7 @@ const editableProductFields = [
   'tags',
   'attributes',
   'shipping',
+  'gst',
 ];
 
 const sortableProductFields = new Set(['name', 'createdAt', 'updatedAt', 'basePrice', 'salePrice']);
@@ -213,6 +219,101 @@ const mergeShipping = (currentShipping = {}, nextShipping = {}) => ({
     : Boolean(currentShipping.isFreeShippingEligible),
 });
 
+const normalizeGst = (value = {}) => {
+  if (value === null || value === undefined || value === '') {
+    return {};
+  }
+
+  if (typeof value !== 'object' || Array.isArray(value)) {
+    throw new ApiError(400, 'gst must be an object');
+  }
+
+  const gst = {};
+
+  if (hasOwn(value, 'hsnCode')) {
+    gst.hsnCode = normalizeHsnCode(value.hsnCode);
+  }
+
+  if (hasOwn(value, 'gstRate')) {
+    gst.gstRate = normalizeRate(value.gstRate, 'gst.gstRate');
+  }
+
+  if (hasOwn(value, 'cgstRate')) {
+    gst.cgstRate = normalizeRate(value.cgstRate, 'gst.cgstRate');
+  }
+
+  if (hasOwn(value, 'sgstRate')) {
+    gst.sgstRate = normalizeRate(value.sgstRate, 'gst.sgstRate');
+  }
+
+  if (hasOwn(value, 'igstRate')) {
+    gst.igstRate = normalizeRate(value.igstRate, 'gst.igstRate');
+  }
+
+  if (hasOwn(value, 'cessRate')) {
+    gst.cessRate = normalizeRate(value.cessRate, 'gst.cessRate');
+  }
+
+  if (hasOwn(value, 'pricingMode')) {
+    const pricingMode = normalizeText(value.pricingMode).toLowerCase();
+
+    if (!['inclusive', 'exclusive'].includes(pricingMode)) {
+      throw new ApiError(400, 'gst.pricingMode must be either inclusive or exclusive');
+    }
+
+    gst.pricingMode = pricingMode;
+  }
+
+  if (hasOwn(value, 'exempt')) {
+    gst.exempt = normalizeBoolean(value.exempt, 'gst.exempt');
+  }
+
+  if (hasOwn(value, 'exemptionReason')) {
+    gst.exemptionReason = normalizeText(value.exemptionReason);
+  }
+
+  if (hasOwn(gst, 'gstRate')) {
+    if (!hasOwn(gst, 'cgstRate') && !hasOwn(value, 'cgstRate')) {
+      gst.cgstRate = Number((gst.gstRate / 2).toFixed(3));
+    }
+
+    if (!hasOwn(gst, 'sgstRate') && !hasOwn(value, 'sgstRate')) {
+      gst.sgstRate = Number((gst.gstRate / 2).toFixed(3));
+    }
+
+    if (!hasOwn(gst, 'igstRate') && !hasOwn(value, 'igstRate')) {
+      gst.igstRate = gst.gstRate;
+    }
+  }
+
+  validateRateBreakup({
+    cgstRate: gst.cgstRate ?? value.cgstRate ?? 0,
+    gstRate: gst.gstRate ?? value.gstRate ?? 0,
+    igstRate: gst.igstRate ?? value.igstRate ?? 0,
+    sgstRate: gst.sgstRate ?? value.sgstRate ?? 0,
+  });
+
+  return gst;
+};
+
+const mergeGst = (currentGst = {}, nextGst = {}) => {
+  const mergedGst = {
+    cessRate: hasOwn(nextGst, 'cessRate') ? nextGst.cessRate : currentGst.cessRate || 0,
+    cgstRate: hasOwn(nextGst, 'cgstRate') ? nextGst.cgstRate : currentGst.cgstRate || 0,
+    exempt: hasOwn(nextGst, 'exempt') ? nextGst.exempt : Boolean(currentGst.exempt),
+    exemptionReason: hasOwn(nextGst, 'exemptionReason') ? nextGst.exemptionReason : currentGst.exemptionReason || '',
+    gstRate: hasOwn(nextGst, 'gstRate') ? nextGst.gstRate : currentGst.gstRate || 0,
+    hsnCode: hasOwn(nextGst, 'hsnCode') ? nextGst.hsnCode : currentGst.hsnCode || '',
+    igstRate: hasOwn(nextGst, 'igstRate') ? nextGst.igstRate : currentGst.igstRate || 0,
+    pricingMode: nextGst.pricingMode || currentGst.pricingMode || 'inclusive',
+    sgstRate: hasOwn(nextGst, 'sgstRate') ? nextGst.sgstRate : currentGst.sgstRate || 0,
+  };
+
+  validateRateBreakup(mergedGst);
+
+  return mergedGst;
+};
+
 const normalizeSeo = (value = {}) => {
   if (value === null || value === undefined || value === '') {
     return {};
@@ -284,6 +385,18 @@ const formatShipping = (shipping = {}) => ({
   },
   shippingClass: shipping.shippingClass || '',
   isFreeShippingEligible: Boolean(shipping.isFreeShippingEligible),
+});
+
+const formatGst = (gst = {}) => ({
+  cessRate: Number(gst.cessRate || 0),
+  cgstRate: Number(gst.cgstRate || 0),
+  exempt: Boolean(gst.exempt),
+  exemptionReason: gst.exemptionReason || '',
+  gstRate: Number(gst.gstRate || 0),
+  hsnCode: gst.hsnCode || '',
+  igstRate: Number(gst.igstRate || 0),
+  pricingMode: gst.pricingMode || 'inclusive',
+  sgstRate: Number(gst.sgstRate || 0),
 });
 
 const formatSeo = (seo = {}, product = {}) => ({
@@ -370,6 +483,7 @@ const formatProduct = (product) => {
     attributes: product.attributes || [],
     options: product.options || [],
     shipping: formatShipping(product.shipping || {}),
+    gst: formatGst(product.gst || {}),
     averageRating: Number(product.averageRating || 0),
     reviewCount: Number(product.reviewCount || 0),
     ratingDistribution: product.ratingDistribution || {
@@ -410,6 +524,7 @@ const buildProductPayload = (
   const productPayload = {};
   let seoPatch = null;
   let shippingPatch = null;
+  let gstPatch = null;
 
   for (const field of editableProductFields) {
     if (!hasOwn(payload, field)) {
@@ -498,6 +613,14 @@ const buildProductPayload = (
       continue;
     }
 
+    if (field === 'gst') {
+      gstPatch = {
+        ...(gstPatch || {}),
+        ...normalizeGst(payload.gst),
+      };
+      continue;
+    }
+
     if (field === 'sku') {
       productPayload.sku = normalizeText(payload.sku).toUpperCase();
       continue;
@@ -514,6 +637,10 @@ const buildProductPayload = (
 
   if (shippingPatch) {
     productPayload.shipping = mergeShipping(currentProduct?.shipping || {}, shippingPatch);
+  }
+
+  if (gstPatch) {
+    productPayload.gst = mergeGst(currentProduct?.gst || {}, gstPatch);
   }
 
   if (requireName && !productPayload.name) {

@@ -3,6 +3,7 @@ import mongoose from 'mongoose';
 const productStatuses = ['draft', 'active', 'inactive'];
 const weightUnits = ['g', 'kg', 'lb', 'oz'];
 const dimensionUnits = ['cm', 'in'];
+const gstPricingModes = ['inclusive', 'exclusive'];
 
 const shippingSchema = new mongoose.Schema(
   {
@@ -89,6 +90,58 @@ const seoSchema = new mongoose.Schema(
     noIndex: {
       type: Boolean,
       default: false,
+    },
+  },
+  {
+    _id: false,
+  },
+);
+
+const productGstSchema = new mongoose.Schema(
+  {
+    cessRate: {
+      type: Number,
+      min: 0,
+      default: 0,
+    },
+    cgstRate: {
+      type: Number,
+      min: 0,
+      default: 0,
+    },
+    exempt: {
+      type: Boolean,
+      default: false,
+    },
+    exemptionReason: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+    gstRate: {
+      type: Number,
+      min: 0,
+      default: 0,
+    },
+    hsnCode: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+    igstRate: {
+      type: Number,
+      min: 0,
+      default: 0,
+    },
+    pricingMode: {
+      type: String,
+      enum: gstPricingModes,
+      default: 'inclusive',
+    },
+    sgstRate: {
+      type: Number,
+      min: 0,
+      default: 0,
     },
   },
   {
@@ -213,6 +266,10 @@ const productSchema = new mongoose.Schema(
       type: shippingSchema,
       default: () => ({}),
     },
+    gst: {
+      type: productGstSchema,
+      default: () => ({}),
+    },
     averageRating: {
       type: Number,
       min: 0,
@@ -278,6 +335,15 @@ productSchema.pre('validate', function validateProductPricing() {
 
 const Product = mongoose.models.Product || mongoose.model('Product', productSchema);
 
-export { dimensionUnits, productSchema, productStatuses, seoSchema, shippingSchema, weightUnits };
+export {
+  dimensionUnits,
+  gstPricingModes,
+  productGstSchema,
+  productSchema,
+  productStatuses,
+  seoSchema,
+  shippingSchema,
+  weightUnits,
+};
 
 export default Product;

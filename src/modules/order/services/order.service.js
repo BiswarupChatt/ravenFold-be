@@ -36,6 +36,15 @@ import ShipmentEvent from '@/modules/shipping/models/shipment-event.model.js';
 import { formatShipment, formatShipmentEvent } from '@/modules/shipping/services/shipment-formatters.js';
 import Address from '@/modules/users/models/address.model.js';
 import User from '@/modules/users/models/user.model.js';
+import { INVOICE_TYPES, PRICE_TAX_MODES } from '@/modules/gst/gst.constants.js';
+import { calculateOrderGst } from '@/modules/gst/services/gst-calculation.service.js';
+import gstConfigurationService from '@/modules/gst/services/gst-configuration.service.js';
+import gstInvoiceService from '@/modules/gst/services/gst-invoice.service.js';
+import {
+  normalizeGstin,
+  normalizeStateCode,
+  validateGstinWithState,
+} from '@/modules/gst/services/gst-validation.service.js';
 
 const DEFAULT_CURRENCY = 'INR';
 const requiredAddressFields = ['fullName', 'phone', 'addressLine1', 'city', 'state', 'pincode', 'country'];
@@ -135,6 +144,7 @@ const normalizeAddressSnapshot = (address = {}, field = 'address') => {
 
   snapshot.addressLine2 = normalizeText(address.addressLine2);
   snapshot.addressType = normalizeText(address.addressType) || 'home';
+  snapshot.stateCode = address.stateCode ? normalizeStateCode(address.stateCode, `${field}.stateCode`) : '';
 
   if (!['home', 'work'].includes(snapshot.addressType)) {
     throw new ApiError(400, `${field}.addressType must be either home or work`);
@@ -149,6 +159,32 @@ const normalizeAddressSnapshot = (address = {}, field = 'address') => {
   }
 
   return snapshot;
+};
+
+const normalizeCheckoutGstDetails = (payload = {}) => {
+  if (!payload || typeof payload !== 'object') {
+    return null;
+  }
+
+  const gstin = normalizeGstin(payload.gstin, 'gstDetails.gstin', { required: true });
+  const stateCode = normalizeStateCode(payload.stateCode, 'gstDetails.stateCode', { required: true });
+
+  validateGstinWithState({ gstin, stateCode });
+
+  const businessName = normalizeText(payload.businessName);
+
+  if (!businessName) {
+    throw new ApiError(400, 'gstDetails.businessName is required');
+  }
+
+  return {
+    businessName,
+    contactNumber: normalizeText(payload.contactNumber),
+    email: normalizeText(payload.email),
+    gstin,
+    stateCode,
+    tradeName: normalizeText(payload.tradeName),
+  };
 };
 
 const getAddressSnapshot = async (userId, addressId, field) => {
@@ -227,7 +263,7 @@ const resolveOrderItemTarget = async (cartItem) => {
     _id: productId,
     status: 'active',
   })
-    .select('_id name slug sku basePrice salePrice hasVariants images status')
+    .select('_id name slug sku basePrice salePrice hasVariants images status categoryId gst')
     .lean()
     .exec();
 
@@ -268,6 +304,18 @@ const resolveOrderItemTarget = async (cartItem) => {
 
   return {
     categoryId: getDocumentId(product.categoryId),
+    gstSnapshot: {
+      cessRate: product.gst?.cessRate || 0,
+      cgstRate: product.gst?.cgstRate || 0,
+      exempt: Boolean(product.gst?.exempt),
+      exemptionReason: product.gst?.exemptionReason || '',
+      gstRate: product.gst?.gstRate || 0,
+      hsnCode: product.gst?.hsnCode || '',
+      igstRate: product.gst?.igstRate || 0,
+      pricingMode: product.gst?.pricingMode || 'inclusive',
+      sgstRate: product.gst?.sgstRate || 0,
+      taxInclusive: (product.gst?.pricingMode || 'inclusive') !== PRICE_TAX_MODES.EXCLUSIVE,
+    },
     productId,
     variantId,
     quantity,
@@ -382,6 +430,7 @@ const formatAddressSnapshot = (address = {}) => ({
   phone: address.phone || '',
   pincode: address.pincode || '',
   state: address.state || '',
+  stateCode: address.stateCode || '',
 });
 
 const formatProductShipping = (product = null) => {
@@ -425,6 +474,8 @@ const formatOrderItem = (item, { includeProductShipping = false } = {}) => {
     productId: getDocumentId(item.productId),
     productSnapshot: item.productSnapshot,
     quantity: item.quantity,
+    gstSnapshot: item.gstSnapshot || null,
+    taxSummary: item.taxSummary || null,
     variantId: getDocumentId(item.variantId),
     createdAt: item.createdAt,
     updatedAt: item.updatedAt,
@@ -449,6 +500,14 @@ const formatOrder = (order, items = [], paymentDetails = {}, options = {}) => ({
   createdAt: order.createdAt,
   currency: order.currency || DEFAULT_CURRENCY,
   itemCount: order.itemCount,
+  invoice: {
+    date: order.invoiceDate || null,
+    financialYear: order.invoiceFinancialYear || '',
+    number: order.invoiceNumber || '',
+    pdfAvailable: Boolean(order.invoiceNumber),
+    status: order.invoiceGenerationStatus || '',
+  },
+  invoiceType: order.invoiceType || INVOICE_TYPES.B2C,
   items: items.map((item) => formatOrderItem(item, options)),
   notes: order.notes || '',
   orderNumber: order.orderNumber,
@@ -459,6 +518,11 @@ const formatOrder = (order, items = [], paymentDetails = {}, options = {}) => ({
   paymentProvider: order.paymentProvider || '',
   paymentStatus: order.paymentStatus,
   placedAt: order.placedAt,
+  customerGstin: order.customerGstin || '',
+  customerBusinessName: order.customerBusinessName || '',
+  customerGstDetails: order.customerGstDetails || {},
+  placeOfSupply: order.placeOfSupply || '',
+  placeOfSupplyStateCode: order.placeOfSupplyStateCode || '',
   providerOrderId: order.providerOrderId || '',
   providerPaymentId: order.providerPaymentId || '',
   productDiscountAmount: order.productDiscountAmount || 0,
@@ -467,8 +531,11 @@ const formatOrder = (order, items = [], paymentDetails = {}, options = {}) => ({
   shippingAddress: formatAddressSnapshot(order.shippingAddress),
   shippingCharge: order.shippingCharge,
   shippingDiscountAmount: order.shippingDiscountAmount || 0,
+  shippingTaxSummary: order.shippingTaxSummary || {},
   status: order.status,
   subtotal: order.subtotal,
+  supplyType: order.supplyType || '',
+  taxTotals: order.taxTotals || {},
   totalMrp: order.totalMrp,
   totalPayable: order.totalPayable,
   totalQuantity: order.totalQuantity,
@@ -800,12 +867,16 @@ const createCheckoutOrder = async (actor, payload = {}) => {
     ? normalizeBoolean(payload.billingSameAsShipping, 'billingSameAsShipping')
     : true;
   const shippingAddress = await getAddressSnapshot(userId, shippingAddressId, 'shippingAddress');
+  const gstDetails = payload.gstDetails ? normalizeCheckoutGstDetails(payload.gstDetails) : null;
   const billingAddress = await resolveBillingAddressSnapshot({
     billingSameAsShipping,
     payload,
     shippingAddress,
     userId,
   });
+  if (gstDetails) {
+    billingAddress.stateCode = gstDetails.stateCode;
+  }
   const { cart, items: cartItems } = await getActiveCartWithItems(userId);
   const orderItems = await buildOrderItems(cartItems);
   const promotionPricing = await promotionEngineService.evaluatePromotions({
@@ -822,7 +893,52 @@ const createCheckoutOrder = async (actor, payload = {}) => {
     );
   }
 
-  const totals = calculateTotals(orderItems, promotionPricing);
+  const baseTotals = calculateTotals(orderItems, promotionPricing);
+  const gstConfig = await gstConfigurationService.getGstConfiguration();
+  const gstCalculation = calculateOrderGst({
+    billingAddress,
+    config: gstConfig,
+    invoiceType: gstDetails ? INVOICE_TYPES.B2B : INVOICE_TYPES.B2C,
+    items: orderItems,
+    orderDate: new Date(),
+    productDiscountAmount: baseTotals.productDiscountAmount,
+    shippingAddress,
+    shippingCharge: baseTotals.shippingCharge,
+    shippingDiscountAmount: baseTotals.shippingDiscountAmount,
+  });
+  const orderItemsWithTax = orderItems.map((item, index) => {
+    const taxLine = gstCalculation.items[index] || {};
+
+    return {
+      ...item,
+      gstSnapshot: {
+        ...item.gstSnapshot,
+        cessRate: taxLine.cessRate || item.gstSnapshot?.cessRate || 0,
+        cgstRate: taxLine.cgstRate || 0,
+        gstRate: taxLine.gstRate || item.gstSnapshot?.gstRate || 0,
+        igstRate: taxLine.igstRate || 0,
+        sgstRate: taxLine.sgstRate || 0,
+        taxInclusive: taxLine.taxInclusive !== false,
+      },
+      taxSummary: {
+        cessAmount: taxLine.cessAmount || 0,
+        cgstAmount: taxLine.cgstAmount || 0,
+        cgstRate: taxLine.cgstRate || 0,
+        discountAmount: taxLine.discountAmount || 0,
+        igstAmount: taxLine.igstAmount || 0,
+        igstRate: taxLine.igstRate || 0,
+        lineTotal: taxLine.lineTotal || item.lineTotal,
+        sgstAmount: taxLine.sgstAmount || 0,
+        sgstRate: taxLine.sgstRate || 0,
+        taxableValue: taxLine.taxableValue || 0,
+        totalTax: taxLine.totalTax || 0,
+      },
+    };
+  });
+  const totals = {
+    ...baseTotals,
+    totalPayable: gstCalculation.totals.grandTotal,
+  };
   let order = null;
   let createdItems = [];
   let inventoryReserved = false;
@@ -834,16 +950,45 @@ const createCheckoutOrder = async (actor, payload = {}) => {
       billingSameAsShipping,
       cartId: cart._id,
       currency: cart.currency || DEFAULT_CURRENCY,
+      customerBusinessName: gstDetails?.businessName || '',
+      customerGstDetails: gstDetails ? {
+        businessName: gstDetails.businessName,
+        contactNumber: gstDetails.contactNumber,
+        email: gstDetails.email,
+        gstin: gstDetails.gstin,
+        tradeName: gstDetails.tradeName,
+      } : {},
+      customerGstin: gstDetails?.gstin || '',
+      invoiceType: gstDetails ? INVOICE_TYPES.B2B : INVOICE_TYPES.B2C,
       notes: normalizeText(payload.notes),
       orderNumber: createOrderNumber(),
       paymentStatus: PAYMENT_STATUS.PENDING,
+      placeOfSupply: gstCalculation.placeOfSupply,
+      placeOfSupplyStateCode: gstCalculation.placeOfSupplyStateCode,
+      sellerGstSnapshot: {
+        authorisedSignatory: gstConfig.authorisedSignatory || {},
+        bankDetails: gstConfig.bankDetails || {},
+        businessLegalName: gstConfig.businessLegalName || '',
+        businessLogoUrl: gstConfig.businessLogoUrl || '',
+        contactNumber: gstConfig.contactNumber || '',
+        email: gstConfig.email || '',
+        gstin: gstConfig.gstin || '',
+        invoiceNotes: gstConfig.invoiceNotes || '',
+        invoiceTerms: gstConfig.invoiceTerms || '',
+        pan: gstConfig.pan || '',
+        registeredAddress: gstConfig.registeredAddress || {},
+        tradeName: gstConfig.tradeName || '',
+      },
       shippingAddress,
+      shippingTaxSummary: gstCalculation.shipping,
       status: ORDER_STATUS.PENDING,
+      supplyType: gstCalculation.supplyType,
+      taxTotals: gstCalculation.totals,
       userId,
     });
 
     createdItems = await OrderItem.insertMany(
-      orderItems.map((item) => ({
+      orderItemsWithTax.map((item) => ({
         ...item,
         orderId: order._id,
       })),
@@ -852,7 +997,7 @@ const createCheckoutOrder = async (actor, payload = {}) => {
     await reserveOrderInventory({
       actor,
       orderId: order._id,
-      orderItems,
+      orderItems: orderItemsWithTax,
     });
     inventoryReserved = true;
 
@@ -874,7 +1019,7 @@ const createCheckoutOrder = async (actor, payload = {}) => {
       await releaseOrderInventory({
         actor,
         orderId: order._id,
-        orderItems,
+        orderItems: orderItemsWithTax,
       });
     }
 
@@ -1052,6 +1197,17 @@ const updateAdminOrderStatus = async (actor, orderId, payload = {}) => {
           error: error?.message || error,
           orderId: getDocumentId(order._id),
         });
+      }
+
+      if (order.paymentStatus === PAYMENT_STATUS.PAID) {
+        try {
+          await gstInvoiceService.generateInvoiceForOrder(order._id, actor);
+        } catch (error) {
+          logger.error('Failed to generate GST invoice after admin delivery update', {
+            error: error?.message || error,
+            orderId: getDocumentId(order._id),
+          });
+        }
       }
     }
   }

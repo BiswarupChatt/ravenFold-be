@@ -20,7 +20,6 @@ const reviewReminderSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: 'OrderItem',
       required: true,
-      index: true,
     },
     productId: {
       type: mongoose.Schema.Types.ObjectId,

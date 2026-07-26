@@ -31,6 +31,7 @@ const productFields = [
   'tags',
   'attributes',
   'shipping',
+  'gst',
 ];
 
 const optionFields = ['name', 'optionType', 'displayStyle', 'sizeGuideImageUrl', 'sortOrder', 'values'];
@@ -55,7 +56,7 @@ const validateProductPayload = (value, { requireCreateFields = false, requireAny
   ['basePrice', 'salePrice'].forEach((field) => assertNumberLikeField(payload, field));
   ['hasVariants', 'isFeatured'].forEach((field) => assertBooleanField(payload, field));
   ['images', 'tags', 'attributes'].forEach((field) => assertArrayField(payload, field));
-  ['seo', 'shipping'].forEach((field) => assertObjectField(payload, field));
+  ['seo', 'shipping', 'gst'].forEach((field) => assertObjectField(payload, field));
 
   return pickAllowedKeys(payload, productFields);
 };

@@ -9,7 +9,7 @@ import {
   pickAllowedKeys,
 } from '@/common/utils/request-schema.util.js';
 
-const checkoutFields = ['shippingAddressId', 'billingSameAsShipping', 'billingAddressId', 'billingAddress', 'notes'];
+const checkoutFields = ['shippingAddressId', 'billingSameAsShipping', 'billingAddressId', 'billingAddress', 'gstDetails', 'notes'];
 const updateStatusFields = ['status', 'note'];
 
 const createCheckoutOrderSchema = createSchema((value) => {
@@ -21,6 +21,7 @@ const createCheckoutOrderSchema = createSchema((value) => {
   assertBooleanField(payload, 'billingSameAsShipping');
   assertStringLikeField(payload, 'billingAddressId');
   assertObjectField(payload, 'billingAddress');
+  assertObjectField(payload, 'gstDetails');
   assertStringLikeField(payload, 'notes');
 
   return pickAllowedKeys(payload, checkoutFields);
