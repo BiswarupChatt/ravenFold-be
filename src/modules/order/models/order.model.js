@@ -122,6 +122,7 @@ const sellerGstSnapshotSchema = new mongoose.Schema(
   {
     authorisedSignatory: { type: Object, default: () => ({}) },
     bankDetails: { type: Object, default: () => ({}) },
+    brandName: { type: String, trim: true, default: '' },
     businessLegalName: { type: String, trim: true, default: '' },
     businessLogoUrl: { type: String, trim: true, default: '' },
     contactNumber: { type: String, trim: true, default: '' },

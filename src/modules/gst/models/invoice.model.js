@@ -23,6 +23,7 @@ const gstPartyAddressSchema = new mongoose.Schema(
 
 const sellerSnapshotSchema = new mongoose.Schema(
   {
+    brandName: { type: String, trim: true, default: '' },
     businessLegalName: { type: String, trim: true, default: '' },
     tradeName: { type: String, trim: true, default: '' },
     gstin: { type: String, trim: true, uppercase: true, default: '' },

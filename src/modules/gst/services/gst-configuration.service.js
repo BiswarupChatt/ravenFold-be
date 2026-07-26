@@ -27,7 +27,8 @@ const defaultConfig = {
     branchName: '',
     ifsc: '',
   },
-  businessLegalName: '',
+  brandName: 'Raven Fold',
+  businessLegalName: 'Aurax & Co',
   businessLogoUrl: '',
   contactNumber: '',
   defaultGstRate: 0,
@@ -130,6 +131,7 @@ const normalizeConfigPayload = (payload = {}) => {
 
   [
     'businessLegalName',
+    'brandName',
     'tradeName',
     'pan',
     'contactNumber',

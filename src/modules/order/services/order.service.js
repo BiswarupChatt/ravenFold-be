@@ -968,7 +968,8 @@ const createCheckoutOrder = async (actor, payload = {}) => {
       sellerGstSnapshot: {
         authorisedSignatory: gstConfig.authorisedSignatory || {},
         bankDetails: gstConfig.bankDetails || {},
-        businessLegalName: gstConfig.businessLegalName || '',
+        brandName: gstConfig.brandName || 'Raven Fold',
+        businessLegalName: gstConfig.businessLegalName || 'Aurax & Co',
         businessLogoUrl: gstConfig.businessLogoUrl || '',
         contactNumber: gstConfig.contactNumber || '',
         email: gstConfig.email || '',

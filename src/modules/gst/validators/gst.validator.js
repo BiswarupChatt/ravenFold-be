@@ -18,6 +18,7 @@ const bankFields = ['accountName', 'accountNumber', 'bankName', 'branchName', 'i
 const configFields = [
   'authorisedSignatory',
   'bankDetails',
+  'brandName',
   'businessLegalName',
   'businessLogoUrl',
   'contactNumber',
@@ -70,6 +71,7 @@ const updateGstConfigurationSchema = createSchema((value) => {
 
   [
     'businessLegalName',
+    'brandName',
     'tradeName',
     'gstin',
     'pan',

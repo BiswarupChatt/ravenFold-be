@@ -18,7 +18,7 @@ import Invoice from '@/modules/gst/models/invoice.model.js';
 import InvoiceCounter from '@/modules/gst/models/invoice-counter.model.js';
 import { getFinancialYear } from '@/modules/gst/services/gst-calculation.service.js';
 import gstConfigurationService from '@/modules/gst/services/gst-configuration.service.js';
-import { generateInvoicePdfBuffer } from '@/modules/gst/services/invoice-pdf-layout.service.js';
+import { generateInvoicePdfBuffer } from '@/modules/gst/services/invoice-pdf-simple-layout.service.js';
 import OrderItem from '@/modules/order/models/order-item.model.js';
 import Order from '@/modules/order/models/order.model.js';
 import User from '@/modules/users/models/user.model.js';
@@ -126,7 +126,8 @@ const reserveInvoiceNumber = async (config, date = new Date()) => {
 const buildSellerSnapshot = (config = {}) => ({
   authorisedSignatory: config.authorisedSignatory || {},
   bankDetails: config.bankDetails || {},
-  businessLegalName: config.businessLegalName || '',
+  brandName: config.brandName || 'Raven Fold',
+  businessLegalName: config.businessLegalName || 'Aurax & Co',
   businessLogoUrl: config.businessLogoUrl || '',
   contactNumber: config.contactNumber || '',
   email: config.email || '',
@@ -267,7 +268,12 @@ const generateInvoiceForOrder = async (orderId, actor = null) => {
     paymentStatus: order.paymentStatus || '',
     placeOfSupply: order.placeOfSupply || '',
     placeOfSupplyStateCode: order.placeOfSupplyStateCode || '',
-    sellerSnapshot: order.sellerGstSnapshot || buildSellerSnapshot(config),
+    sellerSnapshot: {
+      ...buildSellerSnapshot(config),
+      ...(order.sellerGstSnapshot || {}),
+      brandName: order.sellerGstSnapshot?.brandName || config.brandName || 'Raven Fold',
+      businessLegalName: order.sellerGstSnapshot?.businessLegalName || config.businessLegalName || 'Aurax & Co',
+    },
     shipping: order.shippingTaxSummary || {},
     status: INVOICE_STATUS.PENDING,
     supplyType: order.supplyType,
