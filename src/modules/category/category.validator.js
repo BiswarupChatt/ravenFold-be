@@ -1,6 +1,7 @@
 import {
   assertAtLeastOneKey,
   assertBooleanField,
+  assertImageAssetField,
   assertNoUnknownKeys,
   assertRequiredKeys,
   assertStringLikeField,
@@ -24,8 +25,9 @@ const validateCategoryPayload = (value, { requireName = false, requireAny = fals
     assertAtLeastOneKey(payload, categoryFields);
   }
 
-  ['name', 'slug', 'parentCategoryId', 'image'].forEach((field) => assertStringLikeField(payload, field));
+  ['name', 'slug', 'parentCategoryId'].forEach((field) => assertStringLikeField(payload, field));
   assertBooleanField(payload, 'isActive');
+  assertImageAssetField(payload, 'image');
 
   return pickAllowedKeys(payload, categoryFields);
 };

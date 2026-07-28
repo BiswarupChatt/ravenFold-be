@@ -2,6 +2,8 @@ import {
   assertArrayField,
   assertAtLeastOneKey,
   assertBooleanField,
+  assertImageAssetArrayField,
+  assertImageAssetField,
   assertNoUnknownKeys,
   assertNumberLikeField,
   assertObjectField,
@@ -34,7 +36,7 @@ const productFields = [
   'gst',
 ];
 
-const optionFields = ['name', 'optionType', 'displayStyle', 'sizeGuideImageUrl', 'sortOrder', 'values'];
+const optionFields = ['name', 'optionType', 'displayStyle', 'sizeGuideImageAsset', 'sortOrder', 'values'];
 const optionValueFields = ['value', 'label', 'colorHex', 'sortOrder'];
 const variantFields = ['sku', 'optionValues', 'price', 'salePrice', 'images', 'shipping', 'isActive'];
 
@@ -56,6 +58,7 @@ const validateProductPayload = (value, { requireCreateFields = false, requireAny
   ['basePrice', 'salePrice'].forEach((field) => assertNumberLikeField(payload, field));
   ['hasVariants', 'isFeatured'].forEach((field) => assertBooleanField(payload, field));
   ['images', 'tags', 'attributes'].forEach((field) => assertArrayField(payload, field));
+  assertImageAssetArrayField(payload, 'images');
   ['seo', 'shipping', 'gst'].forEach((field) => assertObjectField(payload, field));
 
   return pickAllowedKeys(payload, productFields);
@@ -74,9 +77,10 @@ const validateOptionPayload = (value, { requireName = false, requireAny = false 
     assertAtLeastOneKey(payload, optionFields);
   }
 
-  ['name', 'optionType', 'displayStyle', 'sizeGuideImageUrl'].forEach((field) => assertStringLikeField(payload, field));
+  ['name', 'optionType', 'displayStyle'].forEach((field) => assertStringLikeField(payload, field));
   assertNumberLikeField(payload, 'sortOrder');
   assertArrayField(payload, 'values');
+  assertImageAssetField(payload, 'sizeGuideImageAsset');
 
   return pickAllowedKeys(payload, optionFields);
 };
@@ -117,6 +121,7 @@ const validateVariantPayload = (value, { requireCreateFields = false, requireAny
   assertArrayField(payload, 'optionValues');
   ['price', 'salePrice'].forEach((field) => assertNumberLikeField(payload, field));
   assertArrayField(payload, 'images');
+  assertImageAssetArrayField(payload, 'images');
   assertObjectField(payload, 'shipping');
   assertBooleanField(payload, 'isActive');
 

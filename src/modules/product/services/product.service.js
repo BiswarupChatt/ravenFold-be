@@ -1,4 +1,11 @@
 import ApiError from '@/common/errors/api.error.js';
+import {
+  formatImageAssets,
+  formatImageAsset,
+  getAddedCloudinaryPublicIds,
+  getRemovedCloudinaryPublicIds,
+  normalizeImageAssets,
+} from '@/common/utils/media-asset.util.js';
 import { getPagination } from '@/common/utils/pagination.util.js';
 import {
   assertDatabaseReady,
@@ -25,6 +32,7 @@ import {
   normalizeRate,
   validateRateBreakup,
 } from '@/modules/gst/services/gst-validation.service.js';
+import cloudinaryService from '@/infrastructure/storage/cloudinary.service.js';
 
 const editableProductFields = [
   'name',
@@ -422,7 +430,7 @@ const formatProductOption = (option = {}, values = []) => ({
   name: option.name,
   optionType: option.optionType || 'other',
   displayStyle: option.displayStyle || (option.optionType === 'color' ? 'swatch' : 'button'),
-  sizeGuideImageUrl: option.sizeGuideImageUrl || '',
+  sizeGuideImageAsset: formatImageAsset(option.sizeGuideImageAsset),
   sortOrder: option.sortOrder || 0,
   values: values.map(formatProductOptionValue),
 });
@@ -476,7 +484,8 @@ const formatProduct = (product) => {
     salePrice: product.salePrice ?? null,
     sku: product.sku,
     hasVariants: Boolean(product.hasVariants),
-    images: product.images || [],
+    imageAssets: formatImageAssets(product.images || []),
+    images: formatImageAssets(product.images || []),
     status: product.status,
     isFeatured: Boolean(product.isFeatured),
     tags: product.tags || [],
@@ -583,7 +592,7 @@ const buildProductPayload = (
     }
 
     if (field === 'images') {
-      productPayload.images = normalizeStringArray(payload.images, 'images');
+      productPayload.images = normalizeImageAssets(payload.images, { maxItems: 20 });
       continue;
     }
 
@@ -874,6 +883,8 @@ const createProduct = async (payload) => {
 
     return formatProduct(product);
   } catch (error) {
+    await cloudinaryService.deleteImages(getAddedCloudinaryPublicIds([], productPayload.images || []));
+
     if (error?.code === 11000) {
       const duplicateField = error.keyPattern?.sku ? 'sku' : 'slug';
       throw new ApiError(409, `Product ${duplicateField} already exists`);
@@ -945,6 +956,7 @@ const getProduct = async (productIdOrSlug, options = {}) => {
 
 const updateProduct = async (productId, payload) => {
   const product = await getProductDocument(productId);
+  const previousImages = product.images || [];
   const productPayload = buildProductPayload(payload, { currentProduct: product });
 
   if (Object.keys(productPayload).length === 0) {
@@ -973,12 +985,20 @@ const updateProduct = async (productId, payload) => {
   try {
     await product.save();
   } catch (error) {
+    if (hasOwn(productPayload, 'images')) {
+      await cloudinaryService.deleteImages(getAddedCloudinaryPublicIds(previousImages, productPayload.images || []));
+    }
+
     if (error?.code === 11000) {
       const duplicateField = error.keyPattern?.sku ? 'sku' : 'slug';
       throw new ApiError(409, `Product ${duplicateField} already exists`);
     }
 
     throw error;
+  }
+
+  if (hasOwn(productPayload, 'images')) {
+    await cloudinaryService.deleteImages(getRemovedCloudinaryPublicIds(previousImages, product.images || []));
   }
 
   return formatProduct(product);
@@ -989,6 +1009,11 @@ const deleteProduct = async (productId) => {
   const deletedProduct = formatProduct(product);
   const productOptions = await ProductOption.find({ productId: product._id }).select('_id').lean().exec();
   const productOptionIds = productOptions.map((option) => option._id);
+  const variants = await ProductVariant.find({ productId: product._id }).select('images').lean().exec();
+  const publicIdsToDelete = [
+    ...formatImageAssets(product.images || []).map((asset) => asset.publicId),
+    ...variants.flatMap((variant) => formatImageAssets(variant.images || []).map((asset) => asset.publicId)),
+  ].filter(Boolean);
 
   await ProductVariant.deleteMany({ productId: product._id }).exec();
   await ProductOptionValue.deleteMany({
@@ -998,6 +1023,7 @@ const deleteProduct = async (productId) => {
   }).exec();
   await ProductOption.deleteMany({ productId: product._id }).exec();
   await product.deleteOne();
+  await cloudinaryService.deleteImages(publicIdsToDelete);
 
   return deletedProduct;
 };

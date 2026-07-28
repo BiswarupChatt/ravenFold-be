@@ -1,5 +1,6 @@
 import ApiError from '@/common/errors/api.error.js';
 import { ORDER_STATUS, PAYMENT_STATUS } from '@/common/constants/order.constant.js';
+import { getImageAssetUrl } from '@/common/utils/media-asset.util.js';
 import { getPagination } from '@/common/utils/pagination.util.js';
 import { getDisplayName } from '@/common/utils/user-name.util.js';
 import {
@@ -59,11 +60,11 @@ const formatVariantLabel = (variant) => {
 
 const getProductImage = (product, variant = null) => {
   if (variant?.images?.length) {
-    return variant.images[0];
+    return getImageAssetUrl(variant.images[0]);
   }
 
   if (product?.images?.length) {
-    return product.images[0];
+    return getImageAssetUrl(product.images[0]);
   }
 
   return '';

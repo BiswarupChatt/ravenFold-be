@@ -1,4 +1,11 @@
 import ApiError from '@/common/errors/api.error.js';
+import {
+  formatImageAsset,
+  getAddedCloudinaryPublicIds,
+  getImageAssetPublicId,
+  getImageAssetUrl,
+  normalizeImageAsset,
+} from '@/common/utils/media-asset.util.js';
 import { getPagination } from '@/common/utils/pagination.util.js';
 import {
   assertDatabaseReady,
@@ -13,6 +20,7 @@ import {
 } from '@/common/utils/service.util.js';
 import { createSlug } from '@/common/utils/slug.util.js';
 import Category from '@/modules/category/models/category.model.js';
+import cloudinaryService from '@/infrastructure/storage/cloudinary.service.js';
 
 const editableCategoryFields = ['name', 'slug', 'parentCategoryId', 'image', 'isActive'];
 
@@ -30,7 +38,9 @@ const formatCategory = (category) => {
     name: category.name,
     slug: category.slug,
     parentCategoryId: category.parentCategoryId?.toString() || null,
-    image: category.image || '',
+    image: formatImageAsset(category.image),
+    imageUrl: getImageAssetUrl(category.image),
+    imageAsset: formatImageAsset(category.image),
     isActive: Boolean(category.isActive),
     createdAt: category.createdAt,
     updatedAt: category.updatedAt,
@@ -63,6 +73,11 @@ const buildCategoryPayload = (payload = {}, { requireName = false } = {}) => {
 
     if (field === 'slug') {
       categoryPayload.slug = createSlug(payload.slug);
+      continue;
+    }
+
+    if (field === 'image') {
+      categoryPayload.image = normalizeImageAsset(payload.image);
       continue;
     }
 
@@ -184,7 +199,14 @@ const createCategory = async (payload) => {
   await assertNoCircularParent(createObjectId(), categoryPayload.parentCategoryId);
   await assertCategorySlugIsAvailable(categoryPayload.slug);
 
-  const category = await Category.create(categoryPayload);
+  let category;
+
+  try {
+    category = await Category.create(categoryPayload);
+  } catch (error) {
+    await cloudinaryService.deleteImages(getAddedCloudinaryPublicIds([], [categoryPayload.image]));
+    throw error;
+  }
 
   return formatCategory(category);
 };
@@ -270,6 +292,7 @@ const getCategory = async (categoryIdOrSlug, options = {}) => {
 
 const updateCategory = async (categoryId, payload) => {
   const category = await getCategoryDocument(categoryId);
+  const previousImage = category.image;
   const categoryPayload = buildCategoryPayload(payload);
 
   if (Object.keys(categoryPayload).length === 0) {
@@ -289,11 +312,24 @@ const updateCategory = async (categoryId, payload) => {
   try {
     await category.save();
   } catch (error) {
+    if (hasOwn(categoryPayload, 'image')) {
+      await cloudinaryService.deleteImages(getAddedCloudinaryPublicIds([previousImage], [categoryPayload.image]));
+    }
+
     if (error?.code === 11000) {
       throw new ApiError(409, 'Category slug already exists');
     }
 
     throw error;
+  }
+
+  if (hasOwn(categoryPayload, 'image')) {
+    const previousPublicId = getImageAssetPublicId(previousImage);
+    const nextPublicId = getImageAssetPublicId(category.image);
+
+    if (previousPublicId && previousPublicId !== nextPublicId) {
+      await cloudinaryService.deleteImage(previousPublicId);
+    }
   }
 
   return formatCategory(category);
@@ -308,8 +344,10 @@ const deleteCategory = async (categoryId) => {
   }
 
   const deletedCategory = formatCategory(category);
+  const publicIdToDelete = getImageAssetPublicId(category.image);
 
   await category.deleteOne();
+  await cloudinaryService.deleteImage(publicIdToDelete);
 
   return deletedCategory;
 };

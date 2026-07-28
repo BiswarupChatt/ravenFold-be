@@ -1,5 +1,7 @@
 import mongoose from 'mongoose';
 
+import { imageAssetSchema } from '@/common/utils/image-asset.schema.js';
+
 const productOptionTypes = ['color', 'size', 'other'];
 const productOptionDisplayStyles = ['swatch', 'button', 'dropdown'];
 
@@ -27,10 +29,9 @@ const productOptionSchema = new mongoose.Schema(
       enum: productOptionDisplayStyles,
       default: 'button',
     },
-    sizeGuideImageUrl: {
-      type: String,
-      trim: true,
-      default: '',
+    sizeGuideImageAsset: {
+      type: imageAssetSchema,
+      default: null,
     },
     sortOrder: {
       type: Number,

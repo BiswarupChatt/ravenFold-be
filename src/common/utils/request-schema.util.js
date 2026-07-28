@@ -135,6 +135,46 @@ const assertObjectField = (value, key, field = 'body') => {
   }
 };
 
+const assertImageAssetValue = (fieldValue, field) => {
+  if (fieldValue === null || fieldValue === undefined) {
+    return;
+  }
+
+  if (!isPlainObject(fieldValue)) {
+    fail(`${field} must be an image asset object`);
+  }
+
+  if (!Object.prototype.hasOwnProperty.call(fieldValue, 'url') || typeof fieldValue.url !== 'string' || !fieldValue.url.trim()) {
+    fail(`${field}.url must be a non-empty string`);
+  }
+
+  if (
+    Object.prototype.hasOwnProperty.call(fieldValue, 'publicId')
+    && fieldValue.publicId !== null
+    && fieldValue.publicId !== undefined
+    && typeof fieldValue.publicId !== 'string'
+  ) {
+    fail(`${field}.publicId must be a string`);
+  }
+};
+
+const assertImageAssetField = (value, key, field = 'body') => {
+  if (!Object.prototype.hasOwnProperty.call(value, key)) {
+    return;
+  }
+
+  assertImageAssetValue(value[key], `${field}.${key}`);
+};
+
+const assertImageAssetArrayField = (value, key, field = 'body') => {
+  if (!Object.prototype.hasOwnProperty.call(value, key)) {
+    return;
+  }
+
+  assertArrayField(value, key, field);
+  value[key].forEach((item, index) => assertImageAssetValue(item, `${field}.${key}[${index}]`));
+};
+
 const pickAllowedKeys = (value, allowedKeys) => Object.fromEntries(
   Object.entries(value).filter(([key]) => allowedKeys.includes(key)),
 );
@@ -143,6 +183,8 @@ export {
   assertArrayField,
   assertAtLeastOneKey,
   assertBooleanField,
+  assertImageAssetArrayField,
+  assertImageAssetField,
   assertNoUnknownKeys,
   assertNumberLikeField,
   assertObjectField,

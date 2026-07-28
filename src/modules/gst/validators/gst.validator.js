@@ -2,6 +2,7 @@ import {
   assertArrayField,
   assertAtLeastOneKey,
   assertBooleanField,
+  assertImageAssetField,
   assertNoUnknownKeys,
   assertNumberLikeField,
   assertObjectField,
@@ -20,7 +21,7 @@ const configFields = [
   'bankDetails',
   'brandName',
   'businessLegalName',
-  'businessLogoUrl',
+  'businessLogoAsset',
   'contactNumber',
   'defaultGstRate',
   'email',
@@ -79,13 +80,13 @@ const updateGstConfigurationSchema = createSchema((value) => {
     'email',
     'invoicePrefix',
     'invoiceNumberFormat',
-    'businessLogoUrl',
     'invoiceTerms',
     'invoiceNotes',
     'shippingGstTreatment',
   ].forEach((field) => assertStringLikeField(payload, field));
   ['defaultGstRate', 'nextInvoiceNumber', 'shippingGstRate'].forEach((field) => assertNumberLikeField(payload, field));
   assertBooleanField(payload, 'useFinancialYearNumbering');
+  assertImageAssetField(payload, 'businessLogoAsset');
   assertAddressPayload(payload, 'registeredAddress');
 
   if (Object.prototype.hasOwnProperty.call(payload, 'authorisedSignatory')) {

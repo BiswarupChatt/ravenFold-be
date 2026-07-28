@@ -1,5 +1,7 @@
 import mongoose from 'mongoose';
 
+import { imageAssetSchema } from '@/common/utils/image-asset.schema.js';
+
 const productStatuses = ['draft', 'active', 'inactive'];
 const weightUnits = ['g', 'kg', 'lb', 'oz'];
 const dimensionUnits = ['cm', 'in'];
@@ -215,12 +217,7 @@ const productSchema = new mongoose.Schema(
       default: false,
     },
     images: {
-      type: [
-        {
-          type: String,
-          trim: true,
-        },
-      ],
+      type: [imageAssetSchema],
       default: [],
     },
     status: {

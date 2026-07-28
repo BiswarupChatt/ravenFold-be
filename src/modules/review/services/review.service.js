@@ -1,4 +1,10 @@
 import ApiError from '@/common/errors/api.error.js';
+import {
+  formatImageAssets,
+  getAddedCloudinaryPublicIds,
+  getRemovedCloudinaryPublicIds,
+  normalizeImageAssets,
+} from '@/common/utils/media-asset.util.js';
 import { getPagination } from '@/common/utils/pagination.util.js';
 import { getDisplayName } from '@/common/utils/user-name.util.js';
 import {
@@ -28,6 +34,7 @@ import {
 import { assertEligible, checkEligibility } from '@/modules/review/services/review-eligibility.service.js';
 import { getProductRatingSummary, recalculateProductRatingSummary } from '@/modules/review/services/review-rating.service.js';
 import User from '@/modules/users/models/user.model.js';
+import cloudinaryService from '@/infrastructure/storage/cloudinary.service.js';
 
 const publicReviewPopulate = [
   { path: 'userId', select: 'firstName lastName name avatar' },
@@ -78,9 +85,7 @@ const normalizeImages = (value) => {
     throw new ApiError(400, 'images must be an array');
   }
 
-  const images = value
-    .map((item) => normalizeText(item))
-    .filter(Boolean);
+  const images = normalizeImageAssets(value, { maxItems: REVIEW_LIMITS.MAX_IMAGES });
 
   if (images.length > REVIEW_LIMITS.MAX_IMAGES) {
     throw new ApiError(400, `images cannot contain more than ${REVIEW_LIMITS.MAX_IMAGES} items`);
@@ -157,7 +162,8 @@ const formatPublicReview = (review) => ({
     displayName: maskDisplayName(getDisplayName(review.userId)),
   },
   id: getDocumentId(review._id || review.id),
-  images: Array.isArray(review.images) ? review.images : [],
+  imageAssets: formatImageAssets(review.images || []),
+  images: formatImageAssets(review.images || []),
   isVerifiedPurchase: review.isVerifiedPurchase !== false,
   rating: review.rating,
   title: review.title || '',
@@ -167,7 +173,8 @@ const formatOwnReview = (review) => ({
   comment: review.comment || '',
   createdAt: review.createdAt,
   id: getDocumentId(review._id || review.id),
-  images: Array.isArray(review.images) ? review.images : [],
+  imageAssets: formatImageAssets(review.images || []),
+  images: formatImageAssets(review.images || []),
   isVerifiedPurchase: review.isVerifiedPurchase !== false,
   order: review.orderId
     ? {
@@ -190,7 +197,8 @@ const formatOwnReview = (review) => ({
   product: review.productId
     ? {
       id: getDocumentId(review.productId._id || review.productId.id),
-      images: Array.isArray(review.productId.images) ? review.productId.images : [],
+      imageAssets: formatImageAssets(review.productId.images || []),
+      images: formatImageAssets(review.productId.images || []),
       name: review.productId.name || '',
       slug: review.productId.slug || '',
     }
@@ -222,7 +230,8 @@ const formatAdminReview = (review) => ({
     : null,
   hiddenAt: review.hiddenAt || null,
   id: getDocumentId(review._id || review.id),
-  images: Array.isArray(review.images) ? review.images : [],
+  imageAssets: formatImageAssets(review.images || []),
+  images: formatImageAssets(review.images || []),
   isVerifiedPurchase: review.isVerifiedPurchase !== false,
   moderatedAt: review.moderatedAt || null,
   moderatedBy: review.moderatedBy
@@ -258,7 +267,8 @@ const formatAdminReview = (review) => ({
     ? {
       averageRating: Number(review.productId.averageRating || 0),
       id: getDocumentId(review.productId._id || review.productId.id),
-      images: Array.isArray(review.productId.images) ? review.productId.images : [],
+      imageAssets: formatImageAssets(review.productId.images || []),
+      images: formatImageAssets(review.productId.images || []),
       name: review.productId.name || '',
       reviewCount: Number(review.productId.reviewCount || 0),
       sku: review.productId.sku || '',
@@ -567,6 +577,8 @@ const createReview = async (actor, payload = {}) => {
 
     return formatOwnReview(await Review.findById(review._id).populate(ownReviewPopulate).lean().exec());
   } catch (error) {
+    await cloudinaryService.deleteImages(getAddedCloudinaryPublicIds([], images));
+
     if (error?.code === 11000) {
       throw new ApiError(409, 'Review already exists for this order item');
     }
@@ -579,6 +591,7 @@ const updateReview = async (actor, reviewId, payload = {}) => {
   assertDatabaseReady();
   const userId = normalizeActorId(actor);
   const review = await loadReviewByIdForUser({ reviewId, userId });
+  const previousImages = review.images || [];
   const wasApproved = review.status === REVIEW_STATUS.APPROVED;
 
   if (hasOwn(payload, 'rating')) {
@@ -612,10 +625,22 @@ const updateReview = async (actor, reviewId, payload = {}) => {
   review.approvedAt = null;
   review.rejectedAt = null;
   review.hiddenAt = null;
-  await review.save();
+  try {
+    await review.save();
+  } catch (error) {
+    if (hasOwn(payload, 'images')) {
+      await cloudinaryService.deleteImages(getAddedCloudinaryPublicIds(previousImages, review.images || []));
+    }
+
+    throw error;
+  }
 
   if (wasApproved) {
     await recalculateProductRatingSummary(review.productId);
+  }
+
+  if (hasOwn(payload, 'images')) {
+    await cloudinaryService.deleteImages(getRemovedCloudinaryPublicIds(previousImages, review.images || []));
   }
 
   return formatOwnReview(await Review.findById(review._id).populate(ownReviewPopulate).lean().exec());

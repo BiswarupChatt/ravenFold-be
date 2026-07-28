@@ -1,4 +1,10 @@
 import ApiError from '@/common/errors/api.error.js';
+import {
+  formatImageAssets,
+  getAddedCloudinaryPublicIds,
+  getRemovedCloudinaryPublicIds,
+  normalizeImageAssets,
+} from '@/common/utils/media-asset.util.js';
 import { getPagination } from '@/common/utils/pagination.util.js';
 import {
   assertDatabaseReady,
@@ -8,13 +14,13 @@ import {
   normalizeBoolean,
   normalizeMoney,
   normalizeOptionalNumber,
-  normalizeStringArray,
   normalizeText,
 } from '@/common/utils/service.util.js';
 import ProductOptionValue from '@/modules/product/models/product-option-value.model.js';
 import ProductOption from '@/modules/product/models/product-option.model.js';
 import ProductVariant, { dimensionUnits, weightUnits } from '@/modules/product/models/product-variant.model.js';
 import Product from '@/modules/product/models/product.model.js';
+import cloudinaryService from '@/infrastructure/storage/cloudinary.service.js';
 
 const editableVariantFields = [
   'sku',
@@ -77,7 +83,8 @@ const formatProductVariant = (variant) => ({
   })),
   price: variant.price,
   salePrice: variant.salePrice ?? null,
-  images: variant.images || [],
+  imageAssets: formatImageAssets(variant.images || []),
+  images: formatImageAssets(variant.images || []),
   shipping: formatShipping(variant.shipping || {}),
   isActive: Boolean(variant.isActive),
   createdAt: variant.createdAt,
@@ -335,7 +342,7 @@ const buildVariantPayload = async (
     }
 
     if (field === 'images') {
-      variantPayload.images = normalizeStringArray(payload.images, 'images');
+      variantPayload.images = normalizeImageAssets(payload.images, { maxItems: 20 });
       continue;
     }
 
@@ -412,6 +419,8 @@ const createProductVariant = async (productId, payload) => {
 
     return formatProductVariant(variant);
   } catch (error) {
+    await cloudinaryService.deleteImages(getAddedCloudinaryPublicIds([], variantPayload.images || []));
+
     if (error?.code === 11000) {
       const duplicateField = error.keyPattern?.sku ? 'sku' : 'option values';
       throw new ApiError(409, `Product variant ${duplicateField} already exists`);
@@ -459,6 +468,7 @@ const getProductVariant = async (productId, variantId, options = {}) => {
 const updateProductVariant = async (productId, variantId, payload) => {
   assertDatabaseReady();
   const variant = await getVariantDocument(productId, variantId);
+  const previousImages = variant.images || [];
   const variantPayload = await buildVariantPayload(productId, payload, { currentVariant: variant });
 
   if (Object.keys(variantPayload).length === 0) {
@@ -475,12 +485,20 @@ const updateProductVariant = async (productId, variantId, payload) => {
   try {
     await variant.save();
   } catch (error) {
+    if (hasOwn(variantPayload, 'images')) {
+      await cloudinaryService.deleteImages(getAddedCloudinaryPublicIds(previousImages, variantPayload.images || []));
+    }
+
     if (error?.code === 11000) {
       const duplicateField = error.keyPattern?.sku ? 'sku' : 'option values';
       throw new ApiError(409, `Product variant ${duplicateField} already exists`);
     }
 
     throw error;
+  }
+
+  if (hasOwn(variantPayload, 'images')) {
+    await cloudinaryService.deleteImages(getRemovedCloudinaryPublicIds(previousImages, variant.images || []));
   }
 
   return formatProductVariant(variant);
@@ -490,8 +508,12 @@ const deleteProductVariant = async (productId, variantId) => {
   assertDatabaseReady();
   const variant = await getVariantDocument(productId, variantId);
   const deletedVariant = formatProductVariant(variant);
+  const publicIdsToDelete = formatImageAssets(variant.images || [])
+    .map((asset) => asset.publicId)
+    .filter(Boolean);
 
   await variant.deleteOne();
+  await cloudinaryService.deleteImages(publicIdsToDelete);
 
   return deletedVariant;
 };

@@ -3,6 +3,7 @@ import { sendSuccess } from '@/common/helpers/response.helper.js';
 import logger from '@/common/logger/logger.js';
 import { ORDER_STATUS, PAYMENT_STATUS } from '@/common/constants/order.constant.js';
 import { PAYMENT_ATTEMPT_STATUS } from '@/common/constants/payment.constant.js';
+import { getImageAssetUrl } from '@/common/utils/media-asset.util.js';
 import { getPagination } from '@/common/utils/pagination.util.js';
 import { getDisplayName } from '@/common/utils/user-name.util.js';
 import {
@@ -124,11 +125,11 @@ const formatVariantLabel = (variant) => {
 
 const getProductImage = (product, variant = null) => {
   if (variant?.images?.length) {
-    return variant.images[0];
+    return getImageAssetUrl(variant.images[0]);
   }
 
   if (product?.images?.length) {
-    return product.images[0];
+    return getImageAssetUrl(product.images[0]);
   }
 
   return '';
@@ -983,7 +984,7 @@ const createCheckoutOrder = async (actor, payload = {}) => {
         bankDetails: gstConfig.bankDetails || {},
         brandName: gstConfig.brandName || 'Raven Fold',
         businessLegalName: gstConfig.businessLegalName || 'Aurax & Co',
-        businessLogoUrl: gstConfig.businessLogoUrl || '',
+        businessLogoUrl: getImageAssetUrl(gstConfig.businessLogoAsset),
         contactNumber: gstConfig.contactNumber || '',
         email: gstConfig.email || '',
         gstin: gstConfig.gstin || '',

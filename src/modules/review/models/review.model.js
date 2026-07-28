@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 
+import { imageAssetSchema } from '@/common/utils/image-asset.schema.js';
 import { REVIEW_LIMITS, REVIEW_STATUS } from '@/modules/review/review.constants.js';
 
 const reviewSchema = new mongoose.Schema(
@@ -54,12 +55,7 @@ const reviewSchema = new mongoose.Schema(
       maxlength: REVIEW_LIMITS.MAX_COMMENT_LENGTH,
     },
     images: {
-      type: [
-        {
-          type: String,
-          trim: true,
-        },
-      ],
+      type: [imageAssetSchema],
       default: [],
     },
     status: {

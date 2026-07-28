@@ -1,5 +1,7 @@
 import mongoose from 'mongoose';
 
+import { imageAssetSchema } from '@/common/utils/image-asset.schema.js';
+
 const categorySchema = new mongoose.Schema(
   {
     name: {
@@ -21,9 +23,8 @@ const categorySchema = new mongoose.Schema(
       index: true,
     },
     image: {
-      type: String,
-      trim: true,
-      default: '',
+      type: imageAssetSchema,
+      default: null,
     },
     isActive: {
       type: Boolean,

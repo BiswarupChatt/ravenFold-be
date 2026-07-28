@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 
+import { imageAssetSchema } from '@/common/utils/image-asset.schema.js';
 import { dimensionUnits, shippingSchema, weightUnits } from '@/modules/product/models/product.model.js';
 
 const variantOptionValueSchema = new mongoose.Schema(
@@ -65,12 +66,7 @@ const productVariantSchema = new mongoose.Schema(
       default: null,
     },
     images: {
-      type: [
-        {
-          type: String,
-          trim: true,
-        },
-      ],
+      type: [imageAssetSchema],
       default: [],
     },
     shipping: {

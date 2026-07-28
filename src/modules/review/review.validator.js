@@ -1,6 +1,7 @@
 import {
   assertArrayField,
   assertAtLeastOneKey,
+  assertImageAssetArrayField,
   assertNoUnknownKeys,
   assertRequiredKeys,
   assertStringLikeField,
@@ -36,6 +37,7 @@ const validateCreateReviewPayload = (value) => {
   assertRequiredKeys(payload, ['orderId', 'orderItemId', 'productId', 'rating', 'comment']);
   ['orderId', 'orderItemId', 'productId', 'variantId', 'rating', 'title', 'comment'].forEach((field) => assertStringLikeField(payload, field));
   assertArrayField(payload, 'images');
+  assertImageAssetArrayField(payload, 'images');
 
   return pickAllowedKeys(payload, createReviewFields);
 };
@@ -47,6 +49,7 @@ const validateUpdateReviewPayload = (value) => {
   assertAtLeastOneKey(payload, updateReviewFields);
   ['rating', 'title', 'comment'].forEach((field) => assertStringLikeField(payload, field));
   assertArrayField(payload, 'images');
+  assertImageAssetArrayField(payload, 'images');
 
   return pickAllowedKeys(payload, updateReviewFields);
 };

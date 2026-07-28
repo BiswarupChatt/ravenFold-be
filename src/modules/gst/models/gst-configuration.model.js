@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 
+import { imageAssetSchema } from '@/common/utils/image-asset.schema.js';
 import { SHIPPING_GST_TREATMENTS } from '@/modules/gst/gst.constants.js';
 
 const gstAddressSchema = new mongoose.Schema(
@@ -62,7 +63,7 @@ const gstConfigurationSchema = new mongoose.Schema(
       default: SHIPPING_GST_TREATMENTS.TAXABLE,
     },
     shippingGstRate: { type: Number, min: 0, default: 0 },
-    businessLogoUrl: { type: String, trim: true, default: '' },
+    businessLogoAsset: { type: imageAssetSchema, default: null },
     authorisedSignatory: { type: signatorySchema, default: () => ({}) },
     bankDetails: { type: bankDetailsSchema, default: () => ({}) },
     invoiceTerms: { type: String, trim: true, default: '' },

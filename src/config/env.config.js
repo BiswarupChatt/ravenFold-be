@@ -33,6 +33,8 @@ export const facebookGraphVersion = process.env.FACEBOOK_GRAPH_VERSION || '';
 export const cloudinaryCloudName = process.env.CLOUDINARY_CLOUD_NAME || '';
 export const cloudinaryApiKey = process.env.CLOUDINARY_API_KEY || '';
 export const cloudinaryApiSecret = process.env.CLOUDINARY_API_SECRET || '';
+export const cloudinaryCategoryUploadFolder = process.env.CLOUDINARY_CATEGORY_UPLOAD_FOLDER || 'ravenfold/categories';
+export const cloudinaryGstUploadFolder = process.env.CLOUDINARY_GST_UPLOAD_FOLDER || 'ravenfold/gst';
 export const cloudinaryUploadFolder = process.env.CLOUDINARY_UPLOAD_FOLDER || 'ravenfold/products';
 export const cloudinaryReviewUploadFolder = process.env.CLOUDINARY_REVIEW_UPLOAD_FOLDER || 'ravenfold/reviews';
 export const paymentDefaultProvider = process.env.PAYMENT_DEFAULT_PROVIDER || 'razorpay';
@@ -68,7 +70,9 @@ export default {
   authLoginThrottleWindowMs,
   cloudinaryApiKey,
   cloudinaryApiSecret,
+  cloudinaryCategoryUploadFolder,
   cloudinaryCloudName,
+  cloudinaryGstUploadFolder,
   cloudinaryReviewUploadFolder,
   cloudinaryUploadFolder,
   enablePaymentReconciliationJobs,

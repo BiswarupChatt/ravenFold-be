@@ -1,4 +1,5 @@
 import ApiError from '@/common/errors/api.error.js';
+import { getImageAssetUrl } from '@/common/utils/media-asset.util.js';
 import {
   assertDatabaseReady,
   escapeRegex,
@@ -154,7 +155,7 @@ const buildSellerSnapshot = (config = {}) => ({
   bankDetails: config.bankDetails || {},
   brandName: config.brandName || 'Raven Fold',
   businessLegalName: config.businessLegalName || 'Aurax & Co',
-  businessLogoUrl: config.businessLogoUrl || '',
+  businessLogoUrl: getImageAssetUrl(config.businessLogoAsset),
   contactNumber: config.contactNumber || '',
   email: config.email || '',
   gstin: config.gstin || '',
@@ -203,10 +204,37 @@ const buildInvoiceItems = (items = []) => items.map((item) => ({
   variantId: item.variantId || null,
 }));
 
-const renderInvoicePdf = (invoice) => ({
-  buffer: generateInvoicePdfBuffer(invoice.toObject ? invoice.toObject() : invoice),
-  invoiceNumber: invoice.invoiceNumber,
-});
+const withCurrentSellerLogo = async (invoice) => {
+  const invoiceData = invoice.toObject ? invoice.toObject() : invoice;
+
+  if (invoiceData.sellerSnapshot?.businessLogoUrl) {
+    return invoiceData;
+  }
+
+  const config = await gstConfigurationService.getGstConfiguration();
+  const businessLogoUrl = getImageAssetUrl(config.businessLogoAsset);
+
+  if (!businessLogoUrl) {
+    return invoiceData;
+  }
+
+  return {
+    ...invoiceData,
+    sellerSnapshot: {
+      ...(invoiceData.sellerSnapshot || {}),
+      businessLogoUrl,
+    },
+  };
+};
+
+const renderInvoicePdf = async (invoice) => {
+  const invoiceData = await withCurrentSellerLogo(invoice);
+
+  return {
+    buffer: await generateInvoicePdfBuffer(invoiceData),
+    invoiceNumber: invoiceData.invoiceNumber,
+  };
+};
 
 const getInvoiceByOrderForCustomer = async (actor, orderId) => {
   assertDatabaseReady();
@@ -298,6 +326,7 @@ const generateInvoiceForOrder = async (orderId, actor = null) => {
       ...buildSellerSnapshot(config),
       ...(order.sellerGstSnapshot || {}),
       brandName: order.sellerGstSnapshot?.brandName || config.brandName || 'Raven Fold',
+      businessLogoUrl: order.sellerGstSnapshot?.businessLogoUrl || getImageAssetUrl(config.businessLogoAsset),
       businessLegalName: order.sellerGstSnapshot?.businessLegalName || config.businessLegalName || 'Aurax & Co',
     },
     shipping: order.shippingTaxSummary || {},

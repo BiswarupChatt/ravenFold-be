@@ -15,6 +15,7 @@ import promotionRoutes from '@/modules/promotion/routes/promotion.routes.js';
 import productRoutes from '@/modules/product/routes/product.routes.js';
 import reviewRoutes from '@/modules/review/routes/review.routes.js';
 import shippingRoutes from '@/modules/shipping/routes/shipping.routes.js';
+import uploadRoutes from '@/modules/upload/upload.routes.js';
 import userRoutes from '@/modules/users/routes/user.routes.js';
 import wishlistRoutes from '@/modules/wishlist/routes/wishlist.routes.js';
 
@@ -52,6 +53,7 @@ router.use('/shipping', shippingRoutes);
 router.use('/reviews', reviewRoutes);
 router.use('/inventory', inventoryRoutes);
 router.use('/analytics', analyticsRoutes);
+router.use('/uploads', uploadRoutes);
 router.use('/admin', adminRoutes);
 
 export default router;

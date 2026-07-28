@@ -191,9 +191,92 @@ const getAddressStateCode = (address = {}) => {
   return GST_STATE_OPTIONS.find((state) => state.name.toLowerCase() === String(address.state || '').toLowerCase())?.code || '';
 };
 
+const logoImageCache = new Map();
+
+const getCloudinaryJpegUrl = (url = '') => {
+  const normalizedUrl = String(url || '').trim();
+
+  if (!normalizedUrl.includes('/upload/')) {
+    return normalizedUrl;
+  }
+
+  return normalizedUrl.replace('/upload/', '/upload/f_jpg,q_auto,w_160,h_160,c_fit/');
+};
+
+const getJpegDimensions = (buffer) => {
+  if (!Buffer.isBuffer(buffer) || buffer.length < 4 || buffer[0] !== 0xff || buffer[1] !== 0xd8) {
+    return null;
+  }
+
+  let offset = 2;
+
+  while (offset < buffer.length) {
+    if (buffer[offset] !== 0xff) {
+      offset += 1;
+      continue;
+    }
+
+    const marker = buffer[offset + 1];
+    const length = buffer.readUInt16BE(offset + 2);
+
+    if (marker >= 0xc0 && marker <= 0xc3) {
+      return {
+        height: buffer.readUInt16BE(offset + 5),
+        width: buffer.readUInt16BE(offset + 7),
+      };
+    }
+
+    offset += 2 + length;
+  }
+
+  return null;
+};
+
+const fetchLogoImage = async (url = '') => {
+  const logoUrl = getCloudinaryJpegUrl(url);
+
+  if (!logoUrl) {
+    return null;
+  }
+
+  if (logoImageCache.has(logoUrl)) {
+    return logoImageCache.get(logoUrl);
+  }
+
+  try {
+    const response = await fetch(logoUrl, {
+      signal: AbortSignal.timeout(5000),
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const buffer = Buffer.from(await response.arrayBuffer());
+    const dimensions = getJpegDimensions(buffer);
+
+    if (!dimensions) {
+      return null;
+    }
+
+    const image = {
+      dataHex: buffer.toString('hex'),
+      height: dimensions.height,
+      width: dimensions.width,
+    };
+
+    logoImageCache.set(logoUrl, image);
+
+    return image;
+  } catch {
+    return null;
+  }
+};
+
 class PdfCanvas {
   constructor() {
     this.pages = [];
+    this.images = [];
     this.addPage();
   }
 
@@ -233,6 +316,24 @@ class PdfCanvas {
   line(x1, y1, x2, y2, color = THEME.divider) {
     this.color({ stroke: color });
     this.cmd(`${x1} ${this.y(y1)} m ${x2} ${this.y(y2)} l S`);
+  }
+
+  image(image, x, y, width, height) {
+    if (!image?.dataHex || !image.width || !image.height) {
+      return;
+    }
+
+    const existingImage = this.images.find((entry) => entry.dataHex === image.dataHex);
+    const imageEntry = existingImage || {
+      ...image,
+      name: `Im${this.images.length + 1}`,
+    };
+
+    if (!existingImage) {
+      this.images.push(imageEntry);
+    }
+
+    this.cmd(`q ${width.toFixed(2)} 0 0 ${height.toFixed(2)} ${x.toFixed(2)} ${this.y(y, height).toFixed(2)} cm /${imageEntry.name} Do Q`);
   }
 
   text(value, x, y, {
@@ -279,6 +380,26 @@ class PdfCanvas {
   }
 }
 
+const drawContainedImage = (pdf, image, x, y, width, height) => {
+  if (!image?.width || !image?.height) {
+    return false;
+  }
+
+  const scale = Math.min(width / image.width, height / image.height);
+  const renderedWidth = image.width * scale;
+  const renderedHeight = image.height * scale;
+
+  pdf.image(
+    image,
+    x + ((width - renderedWidth) / 2),
+    y + ((height - renderedHeight) / 2),
+    renderedWidth,
+    renderedHeight,
+  );
+
+  return true;
+};
+
 const drawSectionTitle = (pdf, label, x, y, width) => {
   pdf.text(label, x, y, {
     bold: true,
@@ -302,7 +423,7 @@ const drawDetail = (pdf, label, value, x, y, width) => {
   });
 };
 
-const drawHeader = (pdf, invoice) => {
+const drawHeader = (pdf, invoice, logoImage = null) => {
   const seller = invoice.sellerSnapshot || {};
   const legalName = seller.businessLegalName || 'Aurax & Co';
   const configuredBrandName = seller.brandName || seller.tradeName || '';
@@ -318,16 +439,18 @@ const drawHeader = (pdf, invoice) => {
     mode: 'f',
     stroke: THEME.primary,
   });
-  pdf.rect(MARGIN + 2, 44, 36, 36, {
-    fill: THEME.soft,
-    mode: 'B',
-    stroke: THEME.divider,
-  });
-  pdf.text(brandInitial, MARGIN + 14, 67, {
-    bold: true,
-    color: THEME.primary,
-    size: 19,
-  });
+  if (!drawContainedImage(pdf, logoImage, MARGIN + 2, 44, 36, 36)) {
+    pdf.rect(MARGIN + 2, 44, 36, 36, {
+      fill: THEME.soft,
+      mode: 'B',
+      stroke: THEME.divider,
+    });
+    pdf.text(brandInitial, MARGIN + 14, 67, {
+      bold: true,
+      color: THEME.primary,
+      size: 19,
+    });
+  }
   pdf.text(brandName, MARGIN + 50, 52, {
     bold: true,
     color: THEME.primary,
@@ -754,10 +877,14 @@ const drawPageNumbers = (pdf) => {
   });
 };
 
-const buildPdf = (pageStreams = []) => {
+const buildPdf = (pageStreams = [], images = []) => {
   const pageCount = pageStreams.length;
-  const pageObjectIds = pageStreams.map((_, index) => 5 + (index * 2));
-  const contentObjectIds = pageStreams.map((_, index) => 6 + (index * 2));
+  const imageObjectIds = images.map((_, index) => 5 + index);
+  const pageObjectIds = pageStreams.map((_, index) => 5 + images.length + (index * 2));
+  const contentObjectIds = pageStreams.map((_, index) => 6 + images.length + (index * 2));
+  const xObjectResources = images.length
+    ? `/XObject << ${images.map((image, index) => `/${image.name} ${imageObjectIds[index]} 0 R`).join(' ')} >>`
+    : '';
   const objects = [
     '<< /Type /Catalog /Pages 2 0 R >>',
     `<< /Type /Pages /Kids [${pageObjectIds.map((id) => `${id} 0 R`).join(' ')}] /Count ${pageCount} >>`,
@@ -765,8 +892,14 @@ const buildPdf = (pageStreams = []) => {
     '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>',
   ];
 
+  images.forEach((image) => {
+    const imageStream = `${image.dataHex}>`;
+
+    objects.push(`<< /Type /XObject /Subtype /Image /Width ${image.width} /Height ${image.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter [/ASCIIHexDecode /DCTDecode] /Length ${imageStream.length} >>\nstream\n${imageStream}\nendstream`);
+  });
+
   pageStreams.forEach((stream, index) => {
-    objects.push(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${PAGE_WIDTH} ${PAGE_HEIGHT}] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents ${contentObjectIds[index]} 0 R >>`);
+    objects.push(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${PAGE_WIDTH} ${PAGE_HEIGHT}] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> ${xObjectResources} >> /Contents ${contentObjectIds[index]} 0 R >>`);
     objects.push(`<< /Length ${Buffer.byteLength(stream)} >>\nstream\n${stream}\nendstream`);
   });
 
@@ -788,10 +921,11 @@ const buildPdf = (pageStreams = []) => {
   return Buffer.from(output);
 };
 
-const generateInvoicePdfBuffer = (invoice) => {
+const generateInvoicePdfBuffer = async (invoice) => {
   const pdf = new PdfCanvas();
+  const logoImage = await fetchLogoImage(invoice?.sellerSnapshot?.businessLogoUrl);
 
-  drawHeader(pdf, invoice);
+  drawHeader(pdf, invoice, logoImage);
   let y = drawInvoiceDetails(pdf, invoice, 118);
 
   y = drawParties(pdf, invoice, y);
@@ -800,7 +934,7 @@ const generateInvoicePdfBuffer = (invoice) => {
   drawTermsAndSignatory(pdf, invoice, y + 4);
   drawPageNumbers(pdf);
 
-  return buildPdf(pdf.pages.map((commands) => commands.join('\n')));
+  return buildPdf(pdf.pages.map((commands) => commands.join('\n')), pdf.images);
 };
 
 export { amountInWords, generateInvoicePdfBuffer };

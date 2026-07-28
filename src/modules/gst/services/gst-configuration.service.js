@@ -1,5 +1,11 @@
 import ApiError from '@/common/errors/api.error.js';
 import {
+  formatImageAsset,
+  getAddedCloudinaryPublicIds,
+  getImageAssetPublicId,
+  normalizeImageAsset,
+} from '@/common/utils/media-asset.util.js';
+import {
   assertDatabaseReady,
   hasOwn,
   normalizeBoolean,
@@ -8,6 +14,7 @@ import {
 import { SHIPPING_GST_TREATMENTS } from '@/modules/gst/gst.constants.js';
 import GstActivityLog from '@/modules/gst/models/gst-activity-log.model.js';
 import GstConfiguration from '@/modules/gst/models/gst-configuration.model.js';
+import cloudinaryService from '@/infrastructure/storage/cloudinary.service.js';
 import {
   getStateCodeFromState,
   normalizeGstin,
@@ -31,7 +38,7 @@ const defaultConfig = {
   },
   brandName: 'Raven Fold',
   businessLegalName: 'Aurax & Co',
-  businessLogoUrl: '',
+  businessLogoAsset: null,
   contactNumber: '',
   defaultGstRate: 0,
   email: '',
@@ -59,23 +66,31 @@ const defaultConfig = {
 
 const getActorId = (actor = null) => actor?.id || null;
 
-const formatConfig = (config = {}) => ({
-  ...defaultConfig,
-  ...(config?.toObject ? config.toObject() : config),
-  id: config?._id?.toString?.() || config?.id || null,
-  registeredAddress: {
-    ...defaultConfig.registeredAddress,
-    ...(config.registeredAddress || {}),
-  },
-  authorisedSignatory: {
-    ...defaultConfig.authorisedSignatory,
-    ...(config.authorisedSignatory || {}),
-  },
-  bankDetails: {
-    ...defaultConfig.bankDetails,
-    ...(config.bankDetails || {}),
-  },
-});
+const formatConfig = (config = {}) => {
+  const normalizedConfig = {
+    ...defaultConfig,
+    ...(config?.toObject ? config.toObject() : config),
+    id: config?._id?.toString?.() || config?.id || null,
+    registeredAddress: {
+      ...defaultConfig.registeredAddress,
+      ...(config.registeredAddress || {}),
+    },
+    authorisedSignatory: {
+      ...defaultConfig.authorisedSignatory,
+      ...(config.authorisedSignatory || {}),
+    },
+    bankDetails: {
+      ...defaultConfig.bankDetails,
+      ...(config.bankDetails || {}),
+    },
+  };
+  const businessLogoAsset = formatImageAsset(normalizedConfig.businessLogoAsset);
+
+  return {
+    ...normalizedConfig,
+    businessLogoAsset,
+  };
+};
 
 const getGstConfiguration = async () => {
   assertDatabaseReady();
@@ -147,7 +162,6 @@ const normalizeConfigPayload = (payload = {}) => {
     'contactNumber',
     'email',
     'invoiceNumberFormat',
-    'businessLogoUrl',
     'invoiceTerms',
     'invoiceNotes',
   ].forEach((field) => {
@@ -155,6 +169,12 @@ const normalizeConfigPayload = (payload = {}) => {
       update[field] = normalizeText(payload[field]);
     }
   });
+
+  if (hasOwn(payload, 'businessLogoAsset')) {
+    const businessLogoAsset = normalizeImageAsset(payload.businessLogoAsset);
+
+    update.businessLogoAsset = businessLogoAsset;
+  }
 
   if (hasOwn(payload, 'gstin')) {
     update.gstin = normalizeGstin(payload.gstin);
@@ -228,7 +248,12 @@ const updateGstConfiguration = async (actor, payload = {}) => {
     throw new ApiError(400, 'No GST configuration fields provided');
   }
 
-  const config = await GstConfiguration.findOneAndUpdate(
+  const previousConfig = await GstConfiguration.findOne({ singletonKey: 'default' }).lean().exec();
+  const previousLogoPublicId = getImageAssetPublicId(previousConfig?.businessLogoAsset);
+  let config;
+
+  try {
+    config = await GstConfiguration.findOneAndUpdate(
     { singletonKey: 'default' },
     {
       $set: {
@@ -244,7 +269,20 @@ const updateGstConfiguration = async (actor, payload = {}) => {
       setDefaultsOnInsert: true,
       upsert: true,
     },
-  ).exec();
+    ).exec();
+  } catch (error) {
+    await cloudinaryService.deleteImages(getAddedCloudinaryPublicIds(
+      [previousConfig?.businessLogoAsset],
+      [update.businessLogoAsset],
+    ));
+    throw error;
+  }
+
+  const nextLogoPublicId = getImageAssetPublicId(config.businessLogoAsset);
+
+  if (previousLogoPublicId && previousLogoPublicId !== nextLogoPublicId) {
+    await cloudinaryService.deleteImage(previousLogoPublicId);
+  }
 
   await GstActivityLog.create({
     action: 'gst_configuration.updated',

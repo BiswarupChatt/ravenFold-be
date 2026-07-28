@@ -1,5 +1,11 @@
 import ApiError from '@/common/errors/api.error.js';
 import {
+  formatImageAsset,
+  getAddedCloudinaryPublicIds,
+  getImageAssetPublicId,
+  normalizeImageAsset,
+} from '@/common/utils/media-asset.util.js';
+import {
   assertDatabaseReady,
   assertValidObjectId,
   escapeRegex,
@@ -13,6 +19,7 @@ import ProductOption, {
 } from '@/modules/product/models/product-option.model.js';
 import ProductVariant from '@/modules/product/models/product-variant.model.js';
 import Product from '@/modules/product/models/product.model.js';
+import cloudinaryService from '@/infrastructure/storage/cloudinary.service.js';
 
 const normalizeOptionType = (value) => {
   const normalizedValue = normalizeText(value).toLowerCase();
@@ -37,26 +44,6 @@ const normalizeDisplayStyle = (value, optionType = 'other') => {
 
   if (!productOptionDisplayStyles.includes(normalizedValue)) {
     throw new ApiError(400, `displayStyle must be one of: ${productOptionDisplayStyles.join(', ')}`);
-  }
-
-  return normalizedValue;
-};
-
-const normalizeOptionalUrl = (value, field) => {
-  const normalizedValue = normalizeText(value);
-
-  if (!normalizedValue) {
-    return '';
-  }
-
-  try {
-    const parsedUrl = new URL(normalizedValue);
-
-    if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
-      throw new Error('Invalid protocol');
-    }
-  } catch {
-    throw new ApiError(400, `${field} must be a valid http or https URL`);
   }
 
   return normalizedValue;
@@ -117,7 +104,7 @@ const formatProductOption = (option, values = []) => ({
   name: option.name,
   optionType: option.optionType || 'other',
   displayStyle: option.displayStyle || (option.optionType === 'color' ? 'swatch' : 'button'),
-  sizeGuideImageUrl: option.sizeGuideImageUrl || '',
+  sizeGuideImageAsset: formatImageAsset(option.sizeGuideImageAsset),
   sortOrder: option.sortOrder || 0,
   values: values.map(formatOptionValue),
   createdAt: option.createdAt,
@@ -145,8 +132,10 @@ const normalizeOptionPayload = (payload = {}, { requireName = false } = {}) => {
     optionPayload.displayStyle = normalizeDisplayStyle('', optionPayload.optionType);
   }
 
-  if (hasOwn(payload, 'sizeGuideImageUrl')) {
-    optionPayload.sizeGuideImageUrl = normalizeOptionalUrl(payload.sizeGuideImageUrl, 'sizeGuideImageUrl');
+  if (hasOwn(payload, 'sizeGuideImageAsset')) {
+    const sizeGuideImageAsset = normalizeImageAsset(payload.sizeGuideImageAsset);
+
+    optionPayload.sizeGuideImageAsset = sizeGuideImageAsset;
   }
 
   if (hasOwn(payload, 'sortOrder')) {
@@ -373,6 +362,8 @@ const createProductOption = async (productId, payload) => {
       productId,
     });
   } catch (error) {
+    await cloudinaryService.deleteImages(getAddedCloudinaryPublicIds([], [optionPayload.sizeGuideImageAsset]));
+
     if (error?.code === 11000) {
       throw new ApiError(409, 'Product option name already exists');
     }
@@ -426,6 +417,7 @@ const getProductOption = async (productId, optionId) => {
 const updateProductOption = async (productId, optionId, payload) => {
   assertDatabaseReady();
   const option = await getOptionDocument(productId, optionId);
+  const previousSizeGuideImageAsset = option.sizeGuideImageAsset;
   const optionPayload = buildProductOptionPayload(payload);
 
   if (Object.keys(optionPayload).length === 0) {
@@ -442,11 +434,25 @@ const updateProductOption = async (productId, optionId, payload) => {
   try {
     await option.save();
   } catch (error) {
+    await cloudinaryService.deleteImages(getAddedCloudinaryPublicIds(
+      [previousSizeGuideImageAsset],
+      [optionPayload.sizeGuideImageAsset],
+    ));
+
     if (error?.code === 11000) {
       throw new ApiError(409, 'Product option name already exists');
     }
 
     throw error;
+  }
+
+  if (hasOwn(optionPayload, 'sizeGuideImageAsset')) {
+    const previousPublicId = getImageAssetPublicId(previousSizeGuideImageAsset);
+    const nextPublicId = getImageAssetPublicId(option.sizeGuideImageAsset);
+
+    if (previousPublicId && previousPublicId !== nextPublicId) {
+      await cloudinaryService.deleteImage(previousPublicId);
+    }
   }
 
   return getProductOption(productId, option._id);
@@ -456,10 +462,12 @@ const deleteProductOption = async (productId, optionId) => {
   assertDatabaseReady();
   const option = await getOptionDocument(productId, optionId);
   const deletedOption = await getProductOption(productId, option._id);
+  const sizeGuidePublicId = getImageAssetPublicId(option.sizeGuideImageAsset);
 
   await assertOptionIsNotUsedByVariants(productId, option);
   await ProductOptionValue.deleteMany({ productOptionId: option._id }).exec();
   await option.deleteOne();
+  await cloudinaryService.deleteImage(sizeGuidePublicId);
 
   return deletedOption;
 };
