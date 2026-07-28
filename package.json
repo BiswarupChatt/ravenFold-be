@@ -5,7 +5,9 @@
   "main": "src/server.js",
   "scripts": {
     "dev": "nodemon --exec \"node --import ./src/loaders/alias-register.js\" src/server.js",
+    "start:dev": "node --import ./src/loaders/alias-register.js src/server.js",
     "start": "node --import ./src/loaders/alias-register.js src/server.js",
+    "start:prod": "node --env-file=.env.production --import ./src/loaders/alias-register.js src/server.js",
     "test": "node --import ./src/loaders/alias-register.js --test",
     "seed:dummy-carts": "node --import ./src/loaders/alias-register.js src/scripts/seed-dummy-carts.js",
     "seed:announcement-banners": "node --import ./src/loaders/alias-register.js src/scripts/seed-announcement-banners.js",

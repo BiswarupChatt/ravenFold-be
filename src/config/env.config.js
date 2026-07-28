@@ -2,9 +2,14 @@ import dotenv from 'dotenv';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const envFilePath = resolve(dirname(fileURLToPath(import.meta.url)), '../../.env');
+const appRootPath = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
+const targetEnv = process.env.APP_ENV || process.env.NODE_ENV || 'development';
+const envFileName = process.env.ENV_FILE || `.env.${targetEnv}`;
+const envFilePath = resolve(appRootPath, envFileName);
+const fallbackEnvFilePath = resolve(appRootPath, '.env');
 
 dotenv.config({ path: envFilePath, quiet: true });
+dotenv.config({ path: fallbackEnvFilePath, quiet: true });
 
 export const nodeEnv = process.env.NODE_ENV || 'development';
 export const port = Number(process.env.PORT) || 3000;
