@@ -2,6 +2,7 @@ import express from 'express';
 
 import adminRoutes from '@/routes/admin.routes.js';
 import analyticsRoutes from '@/modules/analytics/routes/analytics.routes.js';
+import announcementBannerRoutes from '@/modules/announcement-banner/routes/announcement-banner.routes.js';
 import authRoutes from '@/modules/auth/routes/auth.routes.js';
 import boxTypeRoutes from '@/modules/box-type/routes/box-type.routes.js';
 import cartRoutes from '@/modules/cart/routes/cart.routes.js';
@@ -46,6 +47,7 @@ router.use('/wishlist', wishlistRoutes);
 router.use('/orders', orderRoutes);
 router.use('/payments', paymentRoutes);
 router.use('/promotions', promotionRoutes);
+router.use('/announcement-banners', announcementBannerRoutes);
 router.use('/shipping', shippingRoutes);
 router.use('/reviews', reviewRoutes);
 router.use('/inventory', inventoryRoutes);
