@@ -23,6 +23,7 @@ import OrderItem from '@/modules/order/models/order-item.model.js';
 import Order from '@/modules/order/models/order.model.js';
 import User from '@/modules/users/models/user.model.js';
 import { getPagination } from '@/common/utils/pagination.util.js';
+import { getDisplayName } from '@/common/utils/user-name.util.js';
 
 const FIXED_INVOICE_PREFIX = 'RF';
 const INVOICE_SEQUENCE_WIDTH = 5;
@@ -168,7 +169,7 @@ const buildCustomerSnapshot = (order, user = null) => ({
   billingAddress: formatAddress(order.billingAddress || {}),
   businessName: order.customerBusinessName || '',
   contactNumber: order.customerGstDetails?.contactNumber || order.billingAddress?.phone || '',
-  customerName: user?.name || order.billingAddress?.fullName || '',
+  customerName: getDisplayName(user) || order.billingAddress?.fullName || '',
   email: order.customerGstDetails?.email || user?.email || '',
   gstin: order.customerGstin || '',
   shippingAddress: formatAddress(order.shippingAddress || {}),
@@ -269,7 +270,7 @@ const generateInvoiceForOrder = async (orderId, actor = null) => {
   const [items, config, user] = await Promise.all([
     OrderItem.find({ orderId: normalizedOrderId }).sort({ createdAt: 1 }).lean().exec(),
     gstConfigurationService.getGstConfiguration(),
-    User.findById(order.userId).select('name email phone').lean().exec(),
+    User.findById(order.userId).select('firstName lastName name email phone').lean().exec(),
   ]);
 
   if (!items.length) {

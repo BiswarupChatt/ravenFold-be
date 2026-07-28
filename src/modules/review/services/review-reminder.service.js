@@ -6,6 +6,7 @@ import {
   normalizeObjectId,
   normalizeText,
 } from '@/common/utils/service.util.js';
+import { getDisplayName } from '@/common/utils/user-name.util.js';
 import {
   frontendUrl,
   reviewReminderBatchSize,
@@ -123,7 +124,7 @@ const sendReminderEmail = async ({ order, orderItem, product, user, variant }) =
     orderItemId: getDocumentId(orderItem._id),
   });
   const payload = {
-    customerName: user.name || 'Customer',
+    customerName: getDisplayName(user) || 'Customer',
     orderId: getDocumentId(order._id),
     orderNumber: order.orderNumber || '',
     productName: orderItem.productSnapshot?.name || product.name || 'Product',

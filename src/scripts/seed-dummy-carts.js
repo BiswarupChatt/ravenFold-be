@@ -21,13 +21,27 @@ const optionSignature = (optionValues = []) => {
     .join('|');
 };
 
+const splitName = (name = '') => {
+  const parts = String(name || '').trim().split(/\s+/).filter(Boolean);
+
+  return {
+    firstName: parts[0] || '',
+    lastName: parts.slice(1).join(' '),
+    name: parts.join(' '),
+  };
+};
+
 const upsertUser = async ({ email, name, phone }) => {
+  const nameParts = splitName(name);
+
   return User.findOneAndUpdate(
     { email },
     {
       $set: {
         email,
-        name,
+        firstName: nameParts.firstName,
+        lastName: nameParts.lastName,
+        name: nameParts.name,
         phone,
         role: ROLES.CUSTOMER,
         roles: [ROLES.CUSTOMER],

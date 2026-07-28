@@ -1,9 +1,10 @@
 import mongoose from 'mongoose';
 
 import ApiError from '@/common/errors/api.error.js';
+import { getDisplayName, normalizeUserNameParts } from '@/common/utils/user-name.util.js';
 import User from '@/modules/users/models/user.model.js';
 
-const editableProfileFields = ['name', 'email', 'phone', 'avatar', 'gender', 'dob'];
+const editableProfileFields = ['firstName', 'lastName', 'name', 'email', 'phone', 'avatar', 'gender', 'dob'];
 
 const assertDatabaseReady = () => {
   if (mongoose.connection.readyState !== 1) {
@@ -31,10 +32,21 @@ const assertValidEmail = (email) => {
   }
 };
 
+const assertValidFirstName = (firstName) => {
+  if (!normalizeText(firstName)) {
+    throw new ApiError(400, 'First name is required');
+  }
+};
+
 const formatUserProfile = (user) => {
+  const firstName = user.firstName || '';
+  const lastName = user.lastName || '';
+
   return {
     id: user.id || user._id?.toString(),
-    name: user.name || '',
+    firstName,
+    lastName,
+    name: getDisplayName(user),
     email: user.email || '',
     phone: user.phone || '',
     avatar: user.avatar || '',
@@ -70,28 +82,54 @@ const getCurrentUserProfile = async (authUser) => {
   return formatUserProfile(user);
 };
 
-const buildProfileUpdate = (payload = {}) => {
-  return editableProfileFields.reduce((update, field) => {
+const buildProfileUpdate = (payload = {}, currentUser = {}) => {
+  const update = editableProfileFields.reduce((profileUpdate, field) => {
     if (!Object.prototype.hasOwnProperty.call(payload, field)) {
-      return update;
+      return profileUpdate;
     }
 
     if (field === 'email') {
       const email = normalizeEmail(payload.email);
 
       assertValidEmail(email);
-      update.email = email;
-      return update;
+      profileUpdate.email = email;
+      return profileUpdate;
     }
 
-    update[field] = normalizeText(payload[field]);
-    return update;
+    profileUpdate[field] = normalizeText(payload[field]);
+    return profileUpdate;
   }, {});
+
+  if (
+    Object.prototype.hasOwnProperty.call(update, 'firstName')
+    || Object.prototype.hasOwnProperty.call(update, 'lastName')
+    || Object.prototype.hasOwnProperty.call(update, 'name')
+  ) {
+    const normalizedName = normalizeUserNameParts({
+      firstName: Object.prototype.hasOwnProperty.call(update, 'firstName')
+        ? update.firstName
+        : currentUser.firstName,
+      lastName: Object.prototype.hasOwnProperty.call(update, 'lastName')
+        ? update.lastName
+        : currentUser.lastName,
+      name: Object.prototype.hasOwnProperty.call(update, 'name')
+        ? update.name
+        : currentUser.name,
+    });
+
+    assertValidFirstName(normalizedName.firstName);
+
+    update.firstName = normalizedName.firstName;
+    update.lastName = normalizedName.lastName;
+    update.name = normalizedName.name;
+  }
+
+  return update;
 };
 
 const updateCurrentUserProfile = async (authUser, payload) => {
   const user = await getAuthenticatedUserDocument(authUser);
-  const update = buildProfileUpdate(payload);
+  const update = buildProfileUpdate(payload, user);
 
   Object.assign(user, update);
 

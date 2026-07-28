@@ -8,7 +8,8 @@
     "start": "node --import ./src/loaders/alias-register.js src/server.js",
     "test": "node --import ./src/loaders/alias-register.js --test",
     "seed:dummy-carts": "node --import ./src/loaders/alias-register.js src/scripts/seed-dummy-carts.js",
-    "seed:announcement-banners": "node --import ./src/loaders/alias-register.js src/scripts/seed-announcement-banners.js"
+    "seed:announcement-banners": "node --import ./src/loaders/alias-register.js src/scripts/seed-announcement-banners.js",
+    "migrate:user-name-parts": "node --import ./src/loaders/alias-register.js src/scripts/migrate-user-name-parts.js"
   },
   "keywords": [],
   "author": "",

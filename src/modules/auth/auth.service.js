@@ -7,6 +7,7 @@ import { nodeEnv } from '@/config/env.config.js';
 import { sendSuccess } from '@/common/helpers/response.helper.js';
 import { signToken } from '@/common/utils/jwt.util.js';
 import { hashPassword, verifyPassword } from '@/common/utils/password.util.js';
+import { normalizeUserNameParts } from '@/common/utils/user-name.util.js';
 import { verifyFacebookToken } from '@/modules/auth/providers/facebook.provider.js';
 import { verifyGoogleToken } from '@/modules/auth/providers/google.provider.js';
 import loginThrottleService from '@/modules/auth/services/login-throttle.service.js';
@@ -53,6 +54,12 @@ const assertValidPassword = (password) => {
 
   if (!/[a-z]/.test(normalizedPassword) || !/[A-Z]/.test(normalizedPassword) || !/\d/.test(normalizedPassword)) {
     throw new ApiError(400, 'Password must include uppercase, lowercase, and numeric characters');
+  }
+};
+
+const assertValidFirstName = (firstName) => {
+  if (!normalizeText(firstName)) {
+    throw new ApiError(400, 'First name is required');
   }
 };
 
@@ -159,8 +166,12 @@ const linkProviderAccount = async (user, providerProfile) => {
     user.authProviders = [...(user.authProviders || []), buildProviderAccount(providerProfile)];
   }
 
-  if (!user.name && providerProfile.name) {
-    user.name = providerProfile.name;
+  if ((!user.firstName && !user.lastName && !user.name) && providerProfile.name) {
+    const normalizedName = normalizeUserNameParts(providerProfile);
+
+    user.firstName = normalizedName.firstName;
+    user.lastName = normalizedName.lastName;
+    user.name = normalizedName.name;
   }
 
   if (!user.avatar && providerProfile.avatar) {
@@ -172,12 +183,15 @@ const linkProviderAccount = async (user, providerProfile) => {
 
 const createProviderUser = async (providerProfile) => {
   const role = ROLES.CUSTOMER;
+  const normalizedName = normalizeUserNameParts(providerProfile);
 
   return createUser({
     authProviders: [buildProviderAccount(providerProfile)],
     avatar: providerProfile.avatar || '',
     email: providerProfile.email,
-    name: providerProfile.name || '',
+    firstName: normalizedName.firstName,
+    lastName: normalizedName.lastName,
+    name: normalizedName.name,
     role,
     roles: [role],
   });
@@ -192,12 +206,17 @@ const getStatusData = () => {
 const registerUser = async (payload) => {
   const email = normalizeEmail(payload?.email);
   const password = payload?.password;
-  const name = normalizeText(payload?.name);
+  const normalizedName = normalizeUserNameParts({
+    firstName: payload?.firstName,
+    lastName: payload?.lastName,
+    name: payload?.name,
+  });
   const phone = normalizeText(payload?.phone);
   const role = getRegistrationRole(payload?.role);
 
   assertValidEmail(email);
   assertValidPassword(password);
+  assertValidFirstName(normalizedName.firstName);
 
   const existingUser = await findUserByEmail(email);
 
@@ -207,7 +226,9 @@ const registerUser = async (payload) => {
 
   const user = await createUser({
     email,
-    name,
+    firstName: normalizedName.firstName,
+    lastName: normalizedName.lastName,
+    name: normalizedName.name,
     phone,
     passwordHash: await hashPassword(password),
     role,

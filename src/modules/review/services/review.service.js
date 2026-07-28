@@ -1,5 +1,6 @@
 import ApiError from '@/common/errors/api.error.js';
 import { getPagination } from '@/common/utils/pagination.util.js';
+import { getDisplayName } from '@/common/utils/user-name.util.js';
 import {
   assertDatabaseReady,
   escapeRegex,
@@ -29,7 +30,7 @@ import { getProductRatingSummary, recalculateProductRatingSummary } from '@/modu
 import User from '@/modules/users/models/user.model.js';
 
 const publicReviewPopulate = [
-  { path: 'userId', select: 'name avatar' },
+  { path: 'userId', select: 'firstName lastName name avatar' },
 ];
 
 const ownReviewPopulate = [
@@ -40,12 +41,12 @@ const ownReviewPopulate = [
 ];
 
 const adminReviewPopulate = [
-  { path: 'userId', select: 'name email phone avatar role isActive' },
+  { path: 'userId', select: 'firstName lastName name email phone avatar role isActive' },
   { path: 'productId', select: 'name slug sku images status averageRating reviewCount' },
   { path: 'variantId', select: 'sku optionValues isActive' },
   { path: 'orderId', select: 'orderNumber status paymentStatus placedAt totalPayable' },
   { path: 'orderItemId', select: 'productSnapshot quantity priceAtTime lineTotal' },
-  { path: 'moderatedBy', select: 'name email role' },
+  { path: 'moderatedBy', select: 'firstName lastName name email role' },
 ];
 
 const sortableAdminFields = new Set(['createdAt', 'updatedAt', 'rating', 'status']);
@@ -153,7 +154,7 @@ const formatPublicReview = (review) => ({
   comment: review.comment || '',
   createdAt: review.createdAt,
   customer: {
-    displayName: maskDisplayName(review.userId?.name || ''),
+    displayName: maskDisplayName(getDisplayName(review.userId)),
   },
   id: getDocumentId(review._id || review.id),
   images: Array.isArray(review.images) ? review.images : [],
@@ -210,9 +211,11 @@ const formatAdminReview = (review) => ({
     ? {
       avatar: review.userId.avatar || '',
       email: review.userId.email || '',
+      firstName: review.userId.firstName || '',
       id: getDocumentId(review.userId._id || review.userId.id),
       isActive: review.userId.isActive !== false,
-      name: review.userId.name || '',
+      lastName: review.userId.lastName || '',
+      name: getDisplayName(review.userId),
       phone: review.userId.phone || '',
       role: review.userId.role || '',
     }
@@ -225,8 +228,10 @@ const formatAdminReview = (review) => ({
   moderatedBy: review.moderatedBy
     ? {
       email: review.moderatedBy.email || '',
+      firstName: review.moderatedBy.firstName || '',
       id: getDocumentId(review.moderatedBy._id || review.moderatedBy.id),
-      name: review.moderatedBy.name || '',
+      lastName: review.moderatedBy.lastName || '',
+      name: getDisplayName(review.moderatedBy),
       role: review.moderatedBy.role || '',
     }
     : null,
@@ -755,6 +760,8 @@ const buildAdminReviewSearchFilter = async (searchValue = '') => {
   const [users, products, orders] = await Promise.all([
     User.find({
       $or: [
+        { firstName: searchRegex },
+        { lastName: searchRegex },
         { email: searchRegex },
         { name: searchRegex },
         { phone: searchRegex },

@@ -4,6 +4,7 @@ import logger from '@/common/logger/logger.js';
 import { ORDER_STATUS, PAYMENT_STATUS } from '@/common/constants/order.constant.js';
 import { PAYMENT_ATTEMPT_STATUS } from '@/common/constants/payment.constant.js';
 import { getPagination } from '@/common/utils/pagination.util.js';
+import { getDisplayName } from '@/common/utils/user-name.util.js';
 import {
   assertDatabaseReady,
   escapeRegex,
@@ -557,9 +558,11 @@ const formatUserSummary = (user) => {
   return {
     avatar: user.avatar || '',
     email: user.email || '',
+    firstName: user.firstName || '',
     id: user._id.toString(),
     isActive: user.isActive !== false,
-    name: user.name || '',
+    lastName: user.lastName || '',
+    name: getDisplayName(user),
     phone: user.phone || '',
     role: user.role || '',
   };
@@ -656,6 +659,8 @@ const buildAdminOrderSearchFilter = async (searchValue = '') => {
   const [users, orderItemOrderIds] = await Promise.all([
     User.find({
       $or: [
+        { firstName: searchRegex },
+        { lastName: searchRegex },
         { name: searchRegex },
         { email: searchRegex },
         { phone: searchRegex },
@@ -1122,7 +1127,7 @@ const listAdminOrders = async (query = {}) => {
   const filter = await buildAdminOrderFilter(query);
   const [orders, total] = await Promise.all([
     Order.find(filter)
-      .populate({ path: 'userId', select: 'name email phone avatar role isActive' })
+      .populate({ path: 'userId', select: 'firstName lastName name email phone avatar role isActive' })
       .sort({ placedAt: -1, createdAt: -1 })
       .skip(skip)
       .limit(limit)
@@ -1148,7 +1153,7 @@ const getAdminOrder = async (orderId) => {
   assertDatabaseReady();
   const normalizedOrderId = normalizeObjectId(orderId, 'order id');
   const order = await Order.findById(normalizedOrderId)
-    .populate({ path: 'userId', select: 'name email phone avatar role isActive' })
+    .populate({ path: 'userId', select: 'firstName lastName name email phone avatar role isActive' })
     .lean()
     .exec();
 

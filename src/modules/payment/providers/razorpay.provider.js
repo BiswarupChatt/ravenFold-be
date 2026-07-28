@@ -1,5 +1,6 @@
 import ApiError from '@/common/errors/api.error.js';
 import { PAYMENT_ATTEMPT_STATUS, PAYMENT_METHOD, PAYMENT_PROVIDER } from '@/common/constants/payment.constant.js';
+import { getDisplayName } from '@/common/utils/user-name.util.js';
 import paymentConfig from '@/config/payment.config.js';
 import {
   assertProviderConfigured,
@@ -103,7 +104,7 @@ const createPaymentSession = async ({ order, paymentAttempt, user }) => {
       prefill: {
         contact: user?.phone || order.shippingAddress?.phone || '',
         email: user?.email || '',
-        name: user?.name || order.shippingAddress?.fullName || '',
+        name: getDisplayName(user) || order.shippingAddress?.fullName || '',
       },
       theme: {
         color: '#1e2952',

@@ -6,6 +6,7 @@ import {
   REFUND_STATUS,
 } from '@/common/constants/payment.constant.js';
 import { getPagination } from '@/common/utils/pagination.util.js';
+import { getDisplayName } from '@/common/utils/user-name.util.js';
 import {
   assertDatabaseReady,
   getDocumentId,
@@ -38,8 +39,10 @@ const formatUserSummary = (user) => {
   return {
     avatar: user.avatar || '',
     email: user.email || '',
+    firstName: user.firstName || '',
     id: user._id.toString(),
-    name: user.name || '',
+    lastName: user.lastName || '',
+    name: getDisplayName(user),
     phone: user.phone || '',
   };
 };
@@ -181,6 +184,8 @@ const buildRefundSearchFilter = async (value = '') => {
   const [users, orders] = await Promise.all([
     User.find({
       $or: [
+        { firstName: searchRegex },
+        { lastName: searchRegex },
         { email: searchRegex },
         { name: searchRegex },
         { phone: searchRegex },
@@ -507,12 +512,12 @@ const listAdminRefunds = async (query = {}) => {
     Refund.find(filter)
       .populate({
         path: 'orderId',
-        populate: { path: 'userId', select: 'name email phone avatar' },
+        populate: { path: 'userId', select: 'firstName lastName name email phone avatar' },
         select: 'currency orderNumber paidAt paymentStatus placedAt shippingAddress status totalPayable userId',
       })
       .populate({ path: 'paymentId', select: 'amount currency providerPaymentId refundedAmount status' })
-      .populate({ path: 'requestedBy', select: 'name email phone avatar' })
-      .populate({ path: 'userId', select: 'name email phone avatar' })
+      .populate({ path: 'requestedBy', select: 'firstName lastName name email phone avatar' })
+      .populate({ path: 'userId', select: 'firstName lastName name email phone avatar' })
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit)

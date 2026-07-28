@@ -5,6 +5,15 @@ const normalizeEmail = (email) => {
   return String(email || '').trim().toLowerCase();
 };
 
+const splitName = (name = '') => {
+  const parts = String(name || '').trim().split(/\s+/).filter(Boolean);
+
+  return {
+    firstName: parts[0] || '',
+    lastName: parts.slice(1).join(' '),
+  };
+};
+
 const graphUrl = (path, params = {}) => {
   const versionPath = facebookGraphVersion ? `/${facebookGraphVersion}` : '';
   const url = new URL(`https://graph.facebook.com${versionPath}${path}`);
@@ -62,10 +71,14 @@ const verifyFacebookToken = async (accessToken) => {
     throw new ApiError(401, 'Facebook account email permission is required');
   }
 
+  const nameParts = splitName(profile.name);
+
   return {
     avatar: profile.picture?.data?.url || '',
     email: normalizeEmail(profile.email),
     emailVerified: Boolean(profile.email),
+    firstName: nameParts.firstName,
+    lastName: nameParts.lastName,
     name: profile.name || '',
     provider: 'facebook',
     providerUserId: profile.id,

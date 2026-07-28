@@ -51,6 +51,8 @@ const formatGoogleProfile = (payload) => {
     avatar: payload.picture || '',
     email: normalizeEmail(payload.email),
     emailVerified: isEmailVerified(payload.email_verified),
+    firstName: payload.given_name || '',
+    lastName: payload.family_name || '',
     name: getName(payload),
     provider: 'google',
     providerUserId: payload.sub,

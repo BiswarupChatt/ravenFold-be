@@ -144,7 +144,7 @@ const assertOrderCanBeFulfilled = (order) => {
 const getOrderForFulfillment = async (orderId) => {
   const normalizedOrderId = normalizeObjectId(orderId, 'order id');
   const order = await Order.findById(normalizedOrderId)
-    .populate({ path: 'userId', select: 'name email phone avatar' })
+    .populate({ path: 'userId', select: 'firstName lastName name email phone avatar' })
     .exec();
 
   if (!order) {

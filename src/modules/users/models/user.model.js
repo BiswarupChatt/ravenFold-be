@@ -1,12 +1,23 @@
 import mongoose from 'mongoose';
 
 import ROLES from '@/common/constants/roles.constant.js';
+import { normalizeUserNameParts } from '@/common/utils/user-name.util.js';
 
 const allowedRoles = Object.values(ROLES);
 const allowedAuthProviders = ['google', 'facebook', 'apple', 'firebase'];
 
 const userSchema = new mongoose.Schema(
   {
+    firstName: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+    lastName: {
+      type: String,
+      trim: true,
+      default: '',
+    },
     name: {
       type: String,
       trim: true,
@@ -117,6 +128,18 @@ const userSchema = new mongoose.Schema(
     },
   },
 );
+
+userSchema.pre('validate', function syncUserNameFields() {
+  const normalizedName = normalizeUserNameParts({
+    firstName: this.firstName,
+    lastName: this.lastName,
+    name: this.name,
+  });
+
+  this.firstName = normalizedName.firstName;
+  this.lastName = normalizedName.lastName;
+  this.name = normalizedName.name;
+});
 
 userSchema.index(
   {

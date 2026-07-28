@@ -1,6 +1,7 @@
 import ApiError from '@/common/errors/api.error.js';
 import { ORDER_STATUS, PAYMENT_STATUS } from '@/common/constants/order.constant.js';
 import { getPagination } from '@/common/utils/pagination.util.js';
+import { getDisplayName } from '@/common/utils/user-name.util.js';
 import {
   assertDatabaseReady,
   escapeRegex,
@@ -111,7 +112,9 @@ const formatUserSummary = (user) => {
 
   return {
     id: user._id.toString(),
-    name: user.name || '',
+    firstName: user.firstName || '',
+    lastName: user.lastName || '',
+    name: getDisplayName(user),
     email: user.email || '',
     phone: user.phone || '',
     avatar: user.avatar || '',
@@ -141,6 +144,8 @@ const buildAdminCartSearchFilter = async (searchValue = '') => {
   const [users, cartItemCartIds] = await Promise.all([
     User.find({
       $or: [
+        { firstName: searchRegex },
+        { lastName: searchRegex },
         { name: searchRegex },
         { email: searchRegex },
         { phone: searchRegex },
@@ -500,7 +505,7 @@ const listAdminCarts = async (query = {}) => {
   const filter = await buildAdminCartFilter(query);
   const [carts, total] = await Promise.all([
     Cart.find(filter)
-      .populate({ path: 'userId', select: 'name email phone avatar role isActive' })
+      .populate({ path: 'userId', select: 'firstName lastName name email phone avatar role isActive' })
       .sort({ updatedAt: -1, createdAt: -1 })
       .skip(skip)
       .limit(limit)
@@ -526,7 +531,7 @@ const getAdminCart = async (cartId) => {
   assertDatabaseReady();
   const normalizedCartId = normalizeObjectId(cartId, 'cart id');
   const cart = await Cart.findById(normalizedCartId)
-    .populate({ path: 'userId', select: 'name email phone avatar role isActive' })
+    .populate({ path: 'userId', select: 'firstName lastName name email phone avatar role isActive' })
     .lean()
     .exec();
 

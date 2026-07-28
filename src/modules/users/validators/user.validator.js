@@ -9,7 +9,7 @@ import {
   pickAllowedKeys,
 } from '@/common/utils/request-schema.util.js';
 
-const updateUserFields = ['name', 'email', 'phone', 'avatar', 'gender', 'dob'];
+const updateUserFields = ['firstName', 'lastName', 'name', 'email', 'phone', 'avatar', 'gender', 'dob'];
 const addressFields = [
   'fullName',
   'phone',

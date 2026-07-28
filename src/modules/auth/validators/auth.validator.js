@@ -7,7 +7,7 @@ import {
   pickAllowedKeys,
 } from '@/common/utils/request-schema.util.js';
 
-const registerFields = ['email', 'password', 'name', 'phone', 'role'];
+const registerFields = ['email', 'password', 'firstName', 'lastName', 'name', 'phone', 'role'];
 const loginFields = ['email', 'password'];
 const changePasswordFields = ['currentPassword', 'newPassword'];
 const requestPasswordResetFields = ['email'];
