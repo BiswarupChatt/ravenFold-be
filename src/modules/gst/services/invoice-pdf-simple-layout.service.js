@@ -1,3 +1,4 @@
+import { formatDate } from '@/common/utils/date.util.js';
 import { GST_STATE_OPTIONS } from '@/modules/gst/gst.constants.js';
 
 const PAGE_WIDTH = 595;
@@ -32,18 +33,6 @@ const formatMoney = (value = 0) => Number(value || 0).toLocaleString('en-IN', {
   maximumFractionDigits: 2,
   minimumFractionDigits: 2,
 });
-
-const formatDate = (value) => {
-  if (!value) {
-    return '-';
-  }
-
-  return new Date(value).toLocaleDateString('en-IN', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-  });
-};
 
 const smallNumbers = [
   'zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine',
