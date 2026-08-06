@@ -39,6 +39,7 @@ const actorPopulate = [
   { path: 'updatedBy', select: actorSelect },
   { path: 'publishedBy', select: actorSelect },
 ];
+const versionedPolicyFields = ['title', 'slug', 'contentHtml'];
 
 const normalizeUserId = (actor = null) => {
   try {
@@ -117,6 +118,10 @@ const formatActor = (actor = null) => {
 };
 
 const isProtectedPolicy = (policy = {}) => protectedPolicySlugs.includes(policy.slug);
+
+const hasVersionedPolicyChange = (policy = {}, policyPayload = {}) => versionedPolicyFields.some((field) => (
+  hasOwn(policyPayload, field) && String(policyPayload[field] || '') !== String(policy[field] || '')
+));
 
 const formatPolicyPage = (policy = {}) => ({
   id: policy.id || policy._id?.toString?.() || '',
@@ -494,10 +499,15 @@ const updatePolicy = async (actor, policyId, payload = {}) => {
     await assertPolicySlugIsAvailable(policyPayload.slug, policy._id);
   }
 
-  await createVersionSnapshot(policy, actorId);
+  const shouldCreateVersion = hasVersionedPolicyChange(policy, policyPayload);
+
+  if (shouldCreateVersion) {
+    await createVersionSnapshot(policy, actorId);
+  }
+
   Object.assign(policy, policyPayload, {
     updatedBy: actorId,
-    version: policy.version + 1,
+    ...(shouldCreateVersion ? { version: policy.version + 1 } : {}),
   });
 
   if (policy.status !== POLICY_PAGE_STATUS.PUBLISHED) {
@@ -529,13 +539,11 @@ const publishPolicy = async (actor, policyId, payload = {}) => {
     throw new ApiError(400, 'content cannot be empty when publishing a policy');
   }
 
-  await createVersionSnapshot(policy, actorId);
   policy.status = POLICY_PAGE_STATUS.PUBLISHED;
   policy.effectiveDate = effectiveDate;
   policy.updatedBy = actorId;
   policy.publishedBy = actorId;
   policy.publishedAt = new Date();
-  policy.version += 1;
 
   await policy.save();
 
@@ -546,12 +554,10 @@ const unpublishPolicy = async (actor, policyId) => {
   const actorId = normalizeUserId(actor);
   const policy = await getPolicyDocument(policyId);
 
-  await createVersionSnapshot(policy, actorId);
   policy.status = POLICY_PAGE_STATUS.DRAFT;
   policy.updatedBy = actorId;
   policy.publishedBy = null;
   policy.publishedAt = null;
-  policy.version += 1;
 
   await policy.save();
 
