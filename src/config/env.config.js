@@ -62,6 +62,7 @@ export const shiprocketWebhookSecret = process.env.SHIPROCKET_WEBHOOK_SECRET || 
 export const delhiveryBaseUrl = process.env.DELHIVERY_BASE_URL || 'https://track.delhivery.com';
 export const delhiveryToken = process.env.DELHIVERY_TOKEN || '';
 export const delhiveryPickupLocation = process.env.DELHIVERY_PICKUP_LOCATION || '';
+export const whatsappWebhookVerifyToken = process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN || '';
 
 export default {
   apiPrefix,
@@ -112,4 +113,5 @@ export default {
   unpaidOrderExpiryBatchSize,
   unpaidOrderExpiryIntervalMs,
   unpaidOrderExpiryMinutes,
+  whatsappWebhookVerifyToken,
 };
