@@ -3,6 +3,7 @@ import express from 'express';
 import asyncHandler from '@/common/helpers/asyncHandler.helper.js';
 import adminMiddleware from '@/common/middleware/admin.middleware.js';
 import { authenticateUser } from '@/common/middleware/auth.middleware.js';
+import { rateLimiters } from '@/common/middleware/rateLimit.middleware.js';
 import validate from '@/common/middleware/validate.middleware.js';
 import shippingController from '@/modules/shipping/controllers/shipping.controller.js';
 import {
@@ -14,7 +15,7 @@ import {
 const router = express.Router();
 
 router.get('/', asyncHandler(shippingController.getStatus));
-router.post('/webhooks/shiprocket', asyncHandler(shippingController.handleShiprocketWebhook));
+router.post('/webhooks/shiprocket', rateLimiters.webhook, asyncHandler(shippingController.handleShiprocketWebhook));
 
 router.post(
   '/admin/orders/:orderId/pack',

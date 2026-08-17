@@ -14,7 +14,16 @@ dotenv.config({ path: fallbackEnvFilePath, quiet: true });
 export const nodeEnv = process.env.NODE_ENV || 'development';
 export const port = Number(process.env.PORT) || 3000;
 export const apiPrefix = process.env.API_PREFIX || '/api';
+export const trustProxy = process.env.TRUST_PROXY || (nodeEnv === 'production' ? '1' : '');
 export const frontendUrl = process.env.FRONTEND_URL || '*';
+export const adminUrl = process.env.ADMIN_URL || '';
+const parseOriginList = (value = '') => String(value || '')
+  .split(',')
+  .map((origin) => origin.trim().replace(/\/$/, ''))
+  .filter(Boolean);
+export const corsAllowedOrigins = parseOriginList(process.env.CORS_ALLOWED_ORIGINS).length > 0
+  ? parseOriginList(process.env.CORS_ALLOWED_ORIGINS)
+  : parseOriginList([frontendUrl, adminUrl].filter((origin) => origin && origin !== '*').join(','));
 export const mongoUri = process.env.MONGO_URI || '';
 export const mongoDbName = process.env.MONGO_DB_NAME || 'ravenfold';
 export const jwtSecret = process.env.JWT_SECRET || '';
@@ -23,6 +32,18 @@ export const authLoginThrottleMaxAttempts = Number(process.env.AUTH_LOGIN_THROTT
 export const authLoginThrottleWindowMs = Number(process.env.AUTH_LOGIN_THROTTLE_WINDOW_MS) || 900000;
 export const authLoginThrottleLockoutMs = Number(process.env.AUTH_LOGIN_THROTTLE_LOCKOUT_MS) || 1800000;
 export const passwordResetTokenTtlMs = Number(process.env.PASSWORD_RESET_TOKEN_TTL_MS) || 1800000;
+export const rateLimitAuthWindowMs = Number(process.env.RATE_LIMIT_AUTH_WINDOW_MS) || 900000;
+export const rateLimitAuthMax = Number(process.env.RATE_LIMIT_AUTH_MAX) || 30;
+export const rateLimitPasswordResetWindowMs = Number(process.env.RATE_LIMIT_PASSWORD_RESET_WINDOW_MS) || 3600000;
+export const rateLimitPasswordResetMax = Number(process.env.RATE_LIMIT_PASSWORD_RESET_MAX) || 5;
+export const rateLimitCheckoutWindowMs = Number(process.env.RATE_LIMIT_CHECKOUT_WINDOW_MS) || 900000;
+export const rateLimitCheckoutMax = Number(process.env.RATE_LIMIT_CHECKOUT_MAX) || 20;
+export const rateLimitPaymentWindowMs = Number(process.env.RATE_LIMIT_PAYMENT_WINDOW_MS) || 900000;
+export const rateLimitPaymentMax = Number(process.env.RATE_LIMIT_PAYMENT_MAX) || 40;
+export const rateLimitUploadWindowMs = Number(process.env.RATE_LIMIT_UPLOAD_WINDOW_MS) || 900000;
+export const rateLimitUploadMax = Number(process.env.RATE_LIMIT_UPLOAD_MAX) || 30;
+export const rateLimitWebhookWindowMs = Number(process.env.RATE_LIMIT_WEBHOOK_WINDOW_MS) || 60000;
+export const rateLimitWebhookMax = Number(process.env.RATE_LIMIT_WEBHOOK_MAX) || 120;
 export const googleClientIds = (process.env.GOOGLE_CLIENT_IDS || process.env.GOOGLE_CLIENT_ID || '')
   .split(',')
   .map((clientId) => clientId.trim())
@@ -65,6 +86,7 @@ export const delhiveryPickupLocation = process.env.DELHIVERY_PICKUP_LOCATION || 
 export const whatsappWebhookVerifyToken = process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN || '';
 
 export default {
+  adminUrl,
   apiPrefix,
   authLoginThrottleLockoutMs,
   authLoginThrottleMaxAttempts,
@@ -76,6 +98,7 @@ export default {
   cloudinaryGstUploadFolder,
   cloudinaryReviewUploadFolder,
   cloudinaryUploadFolder,
+  corsAllowedOrigins,
   enablePaymentReconciliationJobs,
   enableReviewReminderJobs,
   enableUnpaidOrderExpiryJobs,
@@ -96,6 +119,18 @@ export default {
   paymentReconciliationMinAgeMs,
   port,
   promotionNewUserEligibilityDays,
+  rateLimitAuthMax,
+  rateLimitAuthWindowMs,
+  rateLimitCheckoutMax,
+  rateLimitCheckoutWindowMs,
+  rateLimitPasswordResetMax,
+  rateLimitPasswordResetWindowMs,
+  rateLimitPaymentMax,
+  rateLimitPaymentWindowMs,
+  rateLimitUploadMax,
+  rateLimitUploadWindowMs,
+  rateLimitWebhookMax,
+  rateLimitWebhookWindowMs,
   reviewReminderBatchSize,
   reviewReminderDelayDays,
   reviewReminderEmailMode,
@@ -110,6 +145,7 @@ export default {
   shiprocketPickupLocation,
   shiprocketWebhookSecret,
   shippingDefaultProvider,
+  trustProxy,
   unpaidOrderExpiryBatchSize,
   unpaidOrderExpiryIntervalMs,
   unpaidOrderExpiryMinutes,

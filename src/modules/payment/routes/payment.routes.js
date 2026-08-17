@@ -3,6 +3,7 @@ import express from 'express';
 import asyncHandler from '@/common/helpers/asyncHandler.helper.js';
 import adminMiddleware from '@/common/middleware/admin.middleware.js';
 import { authenticateUser } from '@/common/middleware/auth.middleware.js';
+import { rateLimiters } from '@/common/middleware/rateLimit.middleware.js';
 import validate from '@/common/middleware/validate.middleware.js';
 import paymentController from '@/modules/payment/controllers/payment.controller.js';
 import {
@@ -28,25 +29,28 @@ router.get(
   adminMiddleware,
   asyncHandler(paymentController.listAdminPaymentAttempts),
 );
-router.post('/session', authenticateUser, validate(createPaymentSessionSchema), asyncHandler(paymentController.createPaymentSession));
+router.post('/session', authenticateUser, rateLimiters.payment, validate(createPaymentSessionSchema), asyncHandler(paymentController.createPaymentSession));
 router.get(
   '/attempts/:paymentAttemptId/status',
   authenticateUser,
+  rateLimiters.payment,
   asyncHandler(paymentController.getPaymentAttemptStatus),
 );
 router.post(
   '/attempts/:paymentAttemptId/verify',
   authenticateUser,
+  rateLimiters.payment,
   validate(verifyPaymentAttemptSchema),
   asyncHandler(paymentController.verifyPaymentAttempt),
 );
 router.post(
   '/attempts/:paymentAttemptId/failure',
   authenticateUser,
+  rateLimiters.payment,
   validate(recordPaymentAttemptFailureSchema),
   asyncHandler(paymentController.recordPaymentAttemptFailure),
 );
-router.post('/webhooks/:provider', asyncHandler(paymentController.handleProviderWebhook));
-router.post('/webhook', asyncHandler(paymentController.handleWebhook));
+router.post('/webhooks/:provider', rateLimiters.webhook, asyncHandler(paymentController.handleProviderWebhook));
+router.post('/webhook', rateLimiters.webhook, asyncHandler(paymentController.handleWebhook));
 
 export default router;

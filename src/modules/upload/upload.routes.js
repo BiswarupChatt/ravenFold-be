@@ -2,6 +2,7 @@ import express from 'express';
 
 import asyncHandler from '@/common/helpers/asyncHandler.helper.js';
 import { authenticateUser } from '@/common/middleware/auth.middleware.js';
+import { rateLimiters } from '@/common/middleware/rateLimit.middleware.js';
 import {
   multipleImageUpload,
   singleImageUpload,
@@ -13,6 +14,7 @@ const router = express.Router();
 router.post(
   '/images',
   authenticateUser,
+  rateLimiters.upload,
   singleImageUpload,
   asyncHandler(uploadController.uploadSingleImage),
 );
@@ -20,6 +22,7 @@ router.post(
 router.post(
   '/images/multiple',
   authenticateUser,
+  rateLimiters.upload,
   multipleImageUpload,
   asyncHandler(uploadController.uploadMultipleImages),
 );
