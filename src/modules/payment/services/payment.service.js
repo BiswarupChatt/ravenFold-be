@@ -1,5 +1,6 @@
 import ApiError from '@/common/errors/api.error.js';
 import { PAYMENT_STATUS, ORDER_STATUS } from '@/common/constants/order.constant.js';
+import logger from '@/common/logger/logger.js';
 import {
   PAYMENT_ATTEMPT_STATUS,
   PAYMENT_METHOD,
@@ -21,6 +22,7 @@ import OrderStatusHistory from '@/modules/order/models/order-status-history.mode
 import Order from '@/modules/order/models/order.model.js';
 import PaymentAttempt from '@/modules/payment/models/payment-attempt.model.js';
 import Payment from '@/modules/payment/models/payment.model.js';
+import { sendOrderPaymentEmail } from '@/infrastructure/email/email.service.js';
 import { getPaymentProvider, listPaymentProviders } from '@/modules/payment/providers/payment-provider.registry.js';
 import promotionService from '@/modules/promotion/services/promotion.service.js';
 import User from '@/modules/users/models/user.model.js';
@@ -543,6 +545,31 @@ const appendOrderStatusHistory = async ({ actorId, fromPaymentStatus, fromStatus
   });
 };
 
+const sendPaymentEmailSafely = async ({ order, paymentStatus }) => {
+  try {
+    const result = await sendOrderPaymentEmail({
+      order,
+      paymentStatus,
+      user: await getUser(order.userId),
+    });
+
+    logger.info('Payment email sent', {
+      emailProvider: result?.provider || '',
+      emailStatus: result?.status || '',
+      orderId: getDocumentId(order._id),
+      orderNumber: order.orderNumber || '',
+      paymentStatus,
+    });
+  } catch (error) {
+    logger.error('Failed to send payment email', {
+      error: error?.message || error,
+      orderId: getDocumentId(order._id),
+      orderNumber: order.orderNumber || '',
+      paymentStatus,
+    });
+  }
+};
+
 const createOrUpdatePaymentRecord = async ({ order, paymentAttempt, result }) => {
   if (!paymentAttempt.providerPaymentId) {
     return null;
@@ -641,6 +668,16 @@ const applyPaymentResultToOrder = async ({ actorId = null, order, paymentAttempt
       fromStatus,
       note: `Payment ${paymentAttempt.status} via ${paymentAttempt.provider}`,
       order,
+    });
+  }
+
+  if (
+    fromPaymentStatus !== order.paymentStatus &&
+    [PAYMENT_STATUS.PAID, PAYMENT_STATUS.FAILED].includes(order.paymentStatus)
+  ) {
+    await sendPaymentEmailSafely({
+      order,
+      paymentStatus: order.paymentStatus,
     });
   }
 };

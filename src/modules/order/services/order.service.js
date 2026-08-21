@@ -43,6 +43,10 @@ import { calculateOrderGst } from '@/modules/gst/services/gst-calculation.servic
 import gstConfigurationService from '@/modules/gst/services/gst-configuration.service.js';
 import gstInvoiceService from '@/modules/gst/services/gst-invoice.service.js';
 import {
+  sendOrderPlacedEmail,
+  sendOrderStatusEmail,
+} from '@/infrastructure/email/email.service.js';
+import {
   getStateCodeFromState,
   normalizeGstin,
   normalizeStateCode,
@@ -113,6 +117,25 @@ const appendOrderStatusHistory = async ({
     toPaymentStatus: order.paymentStatus,
     toStatus: order.status,
   });
+};
+
+const sendOrderEmailSafely = async ({ action, input }) => {
+  try {
+    const result = await action(input);
+
+    logger.info('Order email sent', {
+      emailProvider: result?.provider || '',
+      emailStatus: result?.status || '',
+      orderId: getDocumentId(input?.order?._id),
+      orderNumber: input?.order?.orderNumber || '',
+    });
+  } catch (error) {
+    logger.error('Failed to send order email', {
+      error: error?.message || error,
+      orderId: getDocumentId(input?.order?._id),
+      orderNumber: input?.order?.orderNumber || '',
+    });
+  }
 };
 
 const formatVariantLabel = (variant) => {
@@ -1028,6 +1051,15 @@ const createCheckoutOrder = async (actor, payload = {}) => {
     cart.expiresAt = null;
     await cart.save();
 
+    await sendOrderEmailSafely({
+      action: sendOrderPlacedEmail,
+      input: {
+        items: createdItems,
+        order,
+        user: actor,
+      },
+    });
+
     return formatOrder(order, createdItems);
   } catch (error) {
     if (inventoryReserved && order) {
@@ -1202,6 +1234,15 @@ const updateAdminOrderStatus = async (actor, orderId, payload = {}) => {
       fromStatus,
       note: note || `Order status updated to ${nextStatus} by admin`,
       order,
+    });
+
+    await sendOrderEmailSafely({
+      action: sendOrderStatusEmail,
+      input: {
+        order,
+        previousStatus: fromStatus,
+        user: await User.findById(order.userId).select('firstName lastName name email').lean().exec(),
+      },
     });
 
     if (nextStatus === ORDER_STATUS.DELIVERED) {

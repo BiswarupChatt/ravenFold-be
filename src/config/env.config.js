@@ -17,6 +17,14 @@ export const apiPrefix = process.env.API_PREFIX || '/api';
 export const trustProxy = process.env.TRUST_PROXY || (nodeEnv === 'production' ? '1' : '');
 export const frontendUrl = process.env.FRONTEND_URL || '*';
 export const adminUrl = process.env.ADMIN_URL || '';
+export const emailProvider = process.env.EMAIL_PROVIDER || 'log';
+export const emailFromAddress = process.env.EMAIL_FROM_ADDRESS || 'no-reply@ravenfold.local';
+export const emailFromName = process.env.EMAIL_FROM_NAME || 'Raven Fold';
+export const emailReplyToAddress = process.env.EMAIL_REPLY_TO_ADDRESS || emailFromAddress;
+export const emailReplyToName = process.env.EMAIL_REPLY_TO_NAME || emailFromName;
+export const emailRequestTimeoutMs = Number(process.env.EMAIL_REQUEST_TIMEOUT_MS) || 10000;
+export const zeptoMailApiUrl = process.env.ZEPTO_MAIL_API_URL || 'https://api.zeptomail.com/v1.1/email';
+export const zeptoMailSendToken = process.env.ZEPTO_MAIL_SEND_TOKEN || '';
 const parseOriginList = (value = '') => String(value || '')
   .split(',')
   .map((origin) => origin.trim().replace(/\/$/, ''))
@@ -73,7 +81,6 @@ export const reviewReminderDelayDays = Number(process.env.REVIEW_REMINDER_DELAY_
 export const reviewReminderJobIntervalMs = Number(process.env.REVIEW_REMINDER_JOB_INTERVAL_MS) || 3600000;
 export const reviewReminderMaxAttempts = Number(process.env.REVIEW_REMINDER_MAX_ATTEMPTS) || 3;
 export const reviewReminderBatchSize = Number(process.env.REVIEW_REMINDER_BATCH_SIZE) || 25;
-export const reviewReminderEmailMode = process.env.REVIEW_REMINDER_EMAIL_MODE || 'log';
 export const shippingDefaultProvider = process.env.SHIPPING_DEFAULT_PROVIDER || 'manual';
 export const shiprocketEmail = process.env.SHIPROCKET_EMAIL || '';
 export const shiprocketPassword = process.env.SHIPROCKET_PASSWORD || '';
@@ -99,6 +106,12 @@ export default {
   cloudinaryReviewUploadFolder,
   cloudinaryUploadFolder,
   corsAllowedOrigins,
+  emailFromAddress,
+  emailFromName,
+  emailProvider,
+  emailReplyToAddress,
+  emailReplyToName,
+  emailRequestTimeoutMs,
   enablePaymentReconciliationJobs,
   enableReviewReminderJobs,
   enableUnpaidOrderExpiryJobs,
@@ -133,7 +146,6 @@ export default {
   rateLimitWebhookWindowMs,
   reviewReminderBatchSize,
   reviewReminderDelayDays,
-  reviewReminderEmailMode,
   reviewReminderJobIntervalMs,
   reviewReminderMaxAttempts,
   delhiveryBaseUrl,
@@ -150,4 +162,6 @@ export default {
   unpaidOrderExpiryIntervalMs,
   unpaidOrderExpiryMinutes,
   whatsappWebhookVerifyToken,
+  zeptoMailApiUrl,
+  zeptoMailSendToken,
 };

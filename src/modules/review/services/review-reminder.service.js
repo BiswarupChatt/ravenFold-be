@@ -1,4 +1,3 @@
-import logger from '@/common/logger/logger.js';
 import { ORDER_STATUS, PAYMENT_STATUS } from '@/common/constants/order.constant.js';
 import {
   assertDatabaseReady,
@@ -11,9 +10,9 @@ import {
   frontendUrl,
   reviewReminderBatchSize,
   reviewReminderDelayDays,
-  reviewReminderEmailMode,
   reviewReminderMaxAttempts,
 } from '@/config/env.config.js';
+import { sendReviewReminderEmail } from '@/infrastructure/email/email.service.js';
 import OrderItem from '@/modules/order/models/order-item.model.js';
 import Order from '@/modules/order/models/order.model.js';
 import ProductVariant from '@/modules/product/models/product-variant.model.js';
@@ -134,12 +133,7 @@ const sendReminderEmail = async ({ order, orderItem, product, user, variant }) =
     variantDetails: orderItem.productSnapshot?.variantLabel || variant?.optionValues?.map((entry) => `${entry.optionName}: ${entry.value}`).join(', ') || '',
   };
 
-  if (reviewReminderEmailMode !== 'log') {
-    throw new Error('Review reminder email provider is not configured');
-  }
-
-  logger.info('Review reminder email payload generated', payload);
-  return payload;
+  return sendReviewReminderEmail(payload);
 };
 
 const processReminder = async (reminder) => {

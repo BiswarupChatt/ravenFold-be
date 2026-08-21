@@ -25,6 +25,7 @@ import Order from '@/modules/order/models/order.model.js';
 import User from '@/modules/users/models/user.model.js';
 import { getPagination } from '@/common/utils/pagination.util.js';
 import { getDisplayName } from '@/common/utils/user-name.util.js';
+import { sendInvoiceEmail } from '@/infrastructure/email/email.service.js';
 
 const FIXED_INVOICE_PREFIX = 'RF';
 const INVOICE_SEQUENCE_WIDTH = 5;
@@ -487,6 +488,49 @@ const downloadAdminInvoice = async (invoiceId) => {
   return renderInvoicePdf(invoice);
 };
 
+const sendAdminInvoiceEmail = async (invoiceId, actor = null) => {
+  assertDatabaseReady();
+  const invoice = await Invoice.findById(normalizeObjectId(invoiceId, 'invoice id')).exec();
+
+  if (!invoice) {
+    throw new ApiError(404, 'Invoice not found');
+  }
+
+  const invoiceData = await withCurrentSellerLogo(invoice);
+  const recipientEmail = normalizeText(invoiceData.customerSnapshot?.email);
+
+  if (!recipientEmail) {
+    throw new ApiError(409, 'Customer email is unavailable for this invoice');
+  }
+
+  const result = await sendInvoiceEmail({
+    invoice: invoiceData,
+    pdfBuffer: await generateInvoicePdfBuffer(invoiceData),
+  });
+
+  await GstActivityLog.create({
+    action: 'invoice.email_sent',
+    actorId: getActorId(actor),
+    entityId: invoice._id,
+    entityType: 'Invoice',
+    metadata: {
+      invoiceNumber: invoice.invoiceNumber,
+      provider: result.provider,
+      recipientEmail,
+      status: result.status,
+    },
+  });
+
+  return {
+    delivery: {
+      provider: result.provider,
+      status: result.status,
+    },
+    invoice: formatInvoice(invoiceData),
+    recipientEmail,
+  };
+};
+
 const getReportRows = async (query = {}) => {
   const invoices = await Invoice.find(buildInvoiceFilter(query)).sort({ invoiceDate: 1 }).lean().exec();
   const rows = [];
@@ -629,6 +673,7 @@ export {
   getAdminInvoice,
   getInvoiceByOrderForCustomer,
   listAdminInvoices,
+  sendAdminInvoiceEmail,
 };
 
 export default {
@@ -641,4 +686,5 @@ export default {
   getAdminInvoice,
   getInvoiceByOrderForCustomer,
   listAdminInvoices,
+  sendAdminInvoiceEmail,
 };

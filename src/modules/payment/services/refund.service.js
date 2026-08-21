@@ -1,5 +1,6 @@
 import ApiError from '@/common/errors/api.error.js';
 import { ORDER_STATUS, PAYMENT_STATUS } from '@/common/constants/order.constant.js';
+import logger from '@/common/logger/logger.js';
 import {
   PAYMENT_RECORD_STATUS,
   PAYMENT_PROVIDER,
@@ -20,6 +21,7 @@ import Order from '@/modules/order/models/order.model.js';
 import OrderStatusHistory from '@/modules/order/models/order-status-history.model.js';
 import Payment from '@/modules/payment/models/payment.model.js';
 import Refund from '@/modules/payment/models/refund.model.js';
+import { sendRefundEmail } from '@/infrastructure/email/email.service.js';
 import { getPaymentProvider } from '@/modules/payment/providers/payment-provider.registry.js';
 import User from '@/modules/users/models/user.model.js';
 
@@ -343,6 +345,33 @@ const updatePaymentAndOrderRefundState = async ({
   }
 };
 
+const sendRefundEmailSafely = async ({ order, refund }) => {
+  try {
+    const result = await sendRefundEmail({
+      order,
+      refund,
+      user: await User.findById(refund.userId || order.userId).select('firstName lastName name email').lean().exec(),
+    });
+
+    logger.info('Refund email sent', {
+      emailProvider: result?.provider || '',
+      emailStatus: result?.status || '',
+      orderId: getDocumentId(order._id),
+      orderNumber: order.orderNumber || '',
+      refundId: getDocumentId(refund._id),
+      refundStatus: refund.status,
+    });
+  } catch (error) {
+    logger.error('Failed to send refund email', {
+      error: error?.message || error,
+      orderId: getDocumentId(order._id),
+      orderNumber: order.orderNumber || '',
+      refundId: getDocumentId(refund._id),
+      refundStatus: refund.status,
+    });
+  }
+};
+
 const getRefundablePayment = async (payload = {}) => {
   const paymentId = normalizeOptionalObjectId(payload.paymentId, 'payment id');
   const orderId = normalizeOptionalObjectId(payload.orderId, 'order id');
@@ -467,6 +496,13 @@ const createAdminRefund = async (actor, payload = {}) => {
     }
 
     await refund.save();
+
+    if ([REFUND_STATUS.PENDING, REFUND_STATUS.PROCESSED].includes(refund.status)) {
+      await sendRefundEmailSafely({
+        order,
+        refund,
+      });
+    }
 
     return {
       payment: formatPayment(payment),

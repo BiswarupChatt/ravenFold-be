@@ -72,6 +72,12 @@ const downloadAdminInvoice = async (req, res) => sendInvoicePdf(
   await gstInvoiceService.downloadAdminInvoice(req.params.invoiceId),
 );
 
+const sendAdminInvoiceEmail = async (req, res) => sendSuccess(
+  res,
+  await gstInvoiceService.sendAdminInvoiceEmail(req.params.invoiceId, req.user),
+  'Invoice email sent',
+);
+
 const exportGstReport = async (req, res) => {
   const csv = await gstInvoiceService.exportGstReportCsv(req.query);
 
@@ -97,6 +103,7 @@ export {
   getCustomerInvoice,
   getGstConfiguration,
   listAdminInvoices,
+  sendAdminInvoiceEmail,
   updateGstConfiguration,
   validateCheckoutGstDetails,
 };
@@ -110,6 +117,7 @@ export default {
   getCustomerInvoice,
   getGstConfiguration,
   listAdminInvoices,
+  sendAdminInvoiceEmail,
   updateGstConfiguration,
   validateCheckoutGstDetails,
 };

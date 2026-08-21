@@ -1,0 +1,602 @@
+import ApiError from '@/common/errors/api.error.js';
+import logger from '@/common/logger/logger.js';
+import {
+  emailFromAddress,
+  emailFromName,
+  emailProvider,
+  emailReplyToAddress,
+  emailReplyToName,
+  emailRequestTimeoutMs,
+  frontendUrl,
+  zeptoMailApiUrl,
+  zeptoMailSendToken,
+} from '@/config/env.config.js';
+
+const EMAIL_PROVIDERS = Object.freeze({
+  LOG: 'log',
+  ZEPTO_MAIL: 'zeptomail',
+});
+
+const normalizeText = (value) => String(value || '').trim();
+
+const normalizeEmailAddress = (value, field = 'email') => {
+  const email = normalizeText(value).toLowerCase();
+
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    throw new ApiError(400, `${field} must be a valid email address`);
+  }
+
+  return email;
+};
+
+const escapeHtml = (value = '') => normalizeText(value)
+  .replace(/&/g, '&amp;')
+  .replace(/</g, '&lt;')
+  .replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;')
+  .replace(/'/g, '&#39;');
+
+const getResetPasswordUrl = (token) => {
+  const baseUrl = normalizeText(frontendUrl).replace(/\/$/, '');
+
+  if (!baseUrl || baseUrl === '*') {
+    return '';
+  }
+
+  return `${baseUrl}/reset-password?token=${encodeURIComponent(token)}`;
+};
+
+const formatCurrency = (value, currency = 'INR') => {
+  try {
+    return new Intl.NumberFormat('en-IN', {
+      currency: currency || 'INR',
+      style: 'currency',
+    }).format(Number(value || 0));
+  } catch {
+    return `${currency || 'INR'} ${Number(value || 0).toFixed(2)}`;
+  }
+};
+
+const formatDate = (value) => {
+  if (!value) {
+    return '';
+  }
+
+  try {
+    return new Intl.DateTimeFormat('en-IN', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+    }).format(new Date(value));
+  } catch {
+    return '';
+  }
+};
+
+const formatLabel = (value = '') => normalizeText(value)
+  .replace(/_/g, ' ')
+  .replace(/\b\w/g, (char) => char.toUpperCase());
+
+const getCustomerName = ({ order = {}, user = null } = {}) => (
+  user?.name
+  || `${user?.firstName || ''} ${user?.lastName || ''}`.trim()
+  || order.shippingAddress?.fullName
+  || order.billingAddress?.fullName
+  || 'Customer'
+);
+
+const getCustomerEmail = ({ order = {}, user = null } = {}) => (
+  normalizeText(user?.email)
+  || normalizeText(order.customerGstDetails?.email)
+  || normalizeText(order.customerSnapshot?.email)
+);
+
+const getOrderDetailsUrl = (order) => {
+  const baseUrl = normalizeText(frontendUrl).replace(/\/$/, '');
+
+  if (!baseUrl || baseUrl === '*') {
+    return '';
+  }
+
+  return `${baseUrl}/profile/order?orderId=${encodeURIComponent(order._id?.toString?.() || order.id || '')}`;
+};
+
+const summarizeOrderItems = (items = []) => {
+  const safeItems = Array.isArray(items) ? items : [];
+
+  if (!safeItems.length) {
+    return 'your order items';
+  }
+
+  return safeItems
+    .slice(0, 3)
+    .map((item) => {
+      const name = item.productSnapshot?.name || item.name || 'Product';
+      const quantity = Number(item.quantity || 0);
+
+      return `${name}${quantity > 1 ? ` x ${quantity}` : ''}`;
+    })
+    .join(', ');
+};
+
+const getOrderEmailBase = ({ order = {}, user = null }) => ({
+  currency: order.currency || 'INR',
+  customerEmail: getCustomerEmail({ order, user }),
+  customerName: getCustomerName({ order, user }),
+  orderNumber: order.orderNumber || order._id?.toString?.() || order.id || '',
+  orderUrl: getOrderDetailsUrl(order),
+  total: order.totalPayable ?? order.totals?.grandTotal ?? 0,
+});
+
+const buildButton = (href, label) => {
+  if (!href) {
+    return '';
+  }
+
+  return `
+    <p style="margin:24px 0">
+      <a href="${escapeHtml(href)}" style="background:#111827;color:#ffffff;display:inline-block;padding:12px 18px;text-decoration:none">
+        ${escapeHtml(label)}
+      </a>
+    </p>
+  `;
+};
+
+const buildShell = ({ body, preheader = '', title }) => `
+  <div style="display:none;max-height:0;overflow:hidden">${escapeHtml(preheader)}</div>
+  <div style="background:#f7f5f2;margin:0;padding:24px">
+    <div style="background:#ffffff;color:#1f2933;font-family:Arial,sans-serif;margin:0 auto;max-width:640px;padding:28px">
+      <h1 style="font-size:22px;line-height:1.3;margin:0 0 16px">${escapeHtml(title)}</h1>
+      ${body}
+      <p style="color:#697386;font-size:12px;line-height:1.6;margin:28px 0 0">
+        This transactional email was sent by Raven Fold.
+      </p>
+    </div>
+  </div>
+`;
+
+const normalizeAttachment = (attachment = {}) => {
+  const content = Buffer.isBuffer(attachment.content)
+    ? attachment.content.toString('base64')
+    : normalizeText(attachment.content);
+  const normalized = {
+    content,
+    file_cache_key: normalizeText(attachment.fileCacheKey || attachment.file_cache_key),
+    mime_type: normalizeText(attachment.mimeType || attachment.mime_type),
+    name: normalizeText(attachment.name),
+  };
+
+  Object.keys(normalized).forEach((key) => {
+    if (!normalized[key]) {
+      delete normalized[key];
+    }
+  });
+
+  if (!normalized.name) {
+    throw new ApiError(400, 'attachment.name is required');
+  }
+
+  if (!normalized.content && !normalized.file_cache_key) {
+    throw new ApiError(400, 'attachment content or file cache key is required');
+  }
+
+  return normalized;
+};
+
+const createEmailPayload = ({
+  attachments = [],
+  clientReference = '',
+  html,
+  recipientEmail,
+  recipientName = '',
+  subject,
+  text,
+}) => {
+  const toAddress = normalizeEmailAddress(recipientEmail, 'recipientEmail');
+  const fromAddress = normalizeEmailAddress(emailFromAddress, 'EMAIL_FROM_ADDRESS');
+  const payload = {
+    from: {
+      address: fromAddress,
+      name: normalizeText(emailFromName),
+    },
+    subject: normalizeText(subject),
+    to: [
+      {
+        email_address: {
+          address: toAddress,
+          name: normalizeText(recipientName),
+        },
+      },
+    ],
+    track_clicks: false,
+    track_opens: false,
+  };
+
+  if (!payload.subject) {
+    throw new ApiError(400, 'email subject is required');
+  }
+
+  if (html) {
+    payload.htmlbody = html;
+  }
+
+  if (text) {
+    payload.textbody = text;
+  }
+
+  if (!payload.htmlbody && !payload.textbody) {
+    throw new ApiError(400, 'email html or text body is required');
+  }
+
+  if (emailReplyToAddress) {
+    payload.reply_to = [
+      {
+        address: normalizeEmailAddress(emailReplyToAddress, 'EMAIL_REPLY_TO_ADDRESS'),
+        name: normalizeText(emailReplyToName),
+      },
+    ];
+  }
+
+  if (attachments.length) {
+    payload.attachments = attachments.map(normalizeAttachment);
+  }
+
+  if (clientReference) {
+    payload.client_reference = normalizeText(clientReference);
+  }
+
+  return payload;
+};
+
+const parseZeptoMailError = async (response) => {
+  try {
+    const payload = await response.json();
+    const providerMessage = payload?.message
+      || payload?.data?.[0]?.message
+      || payload?.error?.message
+      || JSON.stringify(payload);
+
+    return providerMessage;
+  } catch {
+    return response.text();
+  }
+};
+
+const sendWithZeptoMail = async (payload) => {
+  const token = normalizeText(zeptoMailSendToken);
+
+  if (!token) {
+    throw new ApiError(500, 'ZeptoMail send token is not configured');
+  }
+
+  const authorization = token.toLowerCase().startsWith('zoho-enczapikey ')
+    ? token
+    : `Zoho-enczapikey ${token}`;
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), emailRequestTimeoutMs);
+
+  try {
+    const response = await fetch(zeptoMailApiUrl, {
+      body: JSON.stringify(payload),
+      headers: {
+        Accept: 'application/json',
+        Authorization: authorization,
+        'Content-Type': 'application/json',
+      },
+      method: 'POST',
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      throw new ApiError(
+        response.status >= 500 ? 502 : 500,
+        `ZeptoMail send failed: ${await parseZeptoMailError(response)}`,
+      );
+    }
+
+    let providerResponse = null;
+
+    try {
+      providerResponse = await response.json();
+    } catch {
+      providerResponse = null;
+    }
+
+    return {
+      provider: EMAIL_PROVIDERS.ZEPTO_MAIL,
+      providerResponse,
+      status: 'sent',
+    };
+  } catch (error) {
+    if (error?.name === 'AbortError') {
+      throw new ApiError(504, 'ZeptoMail send timed out');
+    }
+
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
+};
+
+const sendTransactionalEmail = async (input = {}) => {
+  const payload = createEmailPayload(input);
+  const provider = normalizeText(emailProvider).toLowerCase();
+
+  if (!provider || provider === EMAIL_PROVIDERS.LOG) {
+    logger.info('Transactional email payload generated', {
+      attachments: payload.attachments?.map((attachment) => ({
+        mimeType: attachment.mime_type,
+        name: attachment.name,
+      })) || [],
+      clientReference: payload.client_reference || '',
+      provider: EMAIL_PROVIDERS.LOG,
+      subject: payload.subject,
+      to: payload.to.map((entry) => entry.email_address.address),
+    });
+
+    return {
+      provider: EMAIL_PROVIDERS.LOG,
+      status: 'logged',
+    };
+  }
+
+  if (provider === EMAIL_PROVIDERS.ZEPTO_MAIL) {
+    return sendWithZeptoMail(payload);
+  }
+
+  throw new ApiError(500, `Unsupported EMAIL_PROVIDER: ${provider}`);
+};
+
+const sendPasswordResetEmail = async ({ resetToken, user }) => {
+  const resetUrl = getResetPasswordUrl(resetToken);
+  const html = buildShell({
+    body: `
+      <p style="font-size:15px;line-height:1.7;margin:0 0 12px">
+        We received a request to reset your Raven Fold password.
+      </p>
+      ${buildButton(resetUrl, 'Reset password')}
+      <p style="font-size:14px;line-height:1.7;margin:0 0 12px">
+        If the button does not work, open this link:
+      </p>
+      <p style="font-size:13px;line-height:1.6;margin:0;word-break:break-all">
+        ${escapeHtml(resetUrl || resetToken)}
+      </p>
+      <p style="font-size:14px;line-height:1.7;margin:18px 0 0">
+        Ignore this email if you did not request a password reset.
+      </p>
+    `,
+    preheader: 'Reset your Raven Fold account password.',
+    title: 'Reset your password',
+  });
+
+  return sendTransactionalEmail({
+    clientReference: `password-reset:${user._id?.toString?.() || user.id || user.email}`,
+    html,
+    recipientEmail: user.email,
+    recipientName: user.name || `${user.firstName || ''} ${user.lastName || ''}`.trim(),
+    subject: 'Reset your Raven Fold password',
+    text: `Reset your Raven Fold password: ${resetUrl || resetToken}`,
+  });
+};
+
+const sendReviewReminderEmail = async ({
+  customerName,
+  orderNumber,
+  productName,
+  recipientEmail,
+  reviewUrl,
+  variantDetails = '',
+}) => {
+  const html = buildShell({
+    body: `
+      <p style="font-size:15px;line-height:1.7;margin:0 0 12px">
+        Hi ${escapeHtml(customerName || 'Customer')}, your feedback helps other shoppers choose better.
+      </p>
+      <p style="font-size:15px;line-height:1.7;margin:0">
+        Please review ${escapeHtml(productName || 'your purchase')}${variantDetails ? ` (${escapeHtml(variantDetails)})` : ''} from order ${escapeHtml(orderNumber || '')}.
+      </p>
+      ${buildButton(reviewUrl, 'Write a review')}
+    `,
+    preheader: 'Tell us how your recent purchase worked out.',
+    title: 'How was your recent purchase?',
+  });
+
+  return sendTransactionalEmail({
+    clientReference: `review-reminder:${orderNumber}:${productName}`,
+    html,
+    recipientEmail,
+    recipientName: customerName,
+    subject: 'How was your recent purchase?',
+    text: `Please review ${productName || 'your purchase'} from order ${orderNumber || ''}: ${reviewUrl}`,
+  });
+};
+
+const sendInvoiceEmail = async ({ invoice, pdfBuffer }) => {
+  const customer = invoice.customerSnapshot || {};
+  const seller = invoice.sellerSnapshot || {};
+  const recipientEmail = customer.email;
+  const customerName = customer.customerName || customer.businessName || 'Customer';
+  const invoiceNumber = invoice.invoiceNumber || 'invoice';
+  const amount = invoice.totals?.grandTotal ?? invoice.totals?.totalPayable ?? 0;
+  const html = buildShell({
+    body: `
+      <p style="font-size:15px;line-height:1.7;margin:0 0 12px">
+        Hi ${escapeHtml(customerName)}, your tax invoice is attached for order ${escapeHtml(invoice.orderNumber || '')}.
+      </p>
+      <p style="font-size:15px;line-height:1.7;margin:0">
+        Invoice ${escapeHtml(invoiceNumber)}${invoice.invoiceDate ? ` dated ${escapeHtml(formatDate(invoice.invoiceDate))}` : ''} for ${escapeHtml(formatCurrency(amount))}.
+      </p>
+    `,
+    preheader: `Invoice ${invoiceNumber} for your Raven Fold order.`,
+    title: 'Your tax invoice',
+  });
+
+  return sendTransactionalEmail({
+    attachments: [
+      {
+        content: pdfBuffer,
+        mimeType: 'application/pdf',
+        name: `${invoiceNumber}.pdf`,
+      },
+    ],
+    clientReference: `gst-invoice:${invoice._id?.toString?.() || invoice.id || invoiceNumber}`,
+    html,
+    recipientEmail,
+    recipientName: customerName,
+    subject: `Tax invoice ${invoiceNumber}`,
+    text: `Your tax invoice ${invoiceNumber} from ${seller.brandName || 'Raven Fold'} is attached.`,
+  });
+};
+
+const sendOrderPlacedEmail = async ({ items = [], order, user }) => {
+  const details = getOrderEmailBase({ order, user });
+  const html = buildShell({
+    body: `
+      <p style="font-size:15px;line-height:1.7;margin:0 0 12px">
+        Hi ${escapeHtml(details.customerName)}, we received your order ${escapeHtml(details.orderNumber)}.
+      </p>
+      <p style="font-size:15px;line-height:1.7;margin:0">
+        Items: ${escapeHtml(summarizeOrderItems(items))}. Total: ${escapeHtml(formatCurrency(details.total, details.currency))}.
+      </p>
+      ${buildButton(details.orderUrl, 'View order')}
+      <p style="font-size:14px;line-height:1.7;margin:18px 0 0">
+        We will confirm the order after payment is completed.
+      </p>
+    `,
+    preheader: `We received order ${details.orderNumber}.`,
+    title: 'Order received',
+  });
+
+  return sendTransactionalEmail({
+    clientReference: `order-placed:${details.orderNumber}`,
+    html,
+    recipientEmail: details.customerEmail,
+    recipientName: details.customerName,
+    subject: `Order received ${details.orderNumber}`,
+    text: `We received your order ${details.orderNumber}. Total: ${formatCurrency(details.total, details.currency)}.`,
+  });
+};
+
+const sendOrderPaymentEmail = async ({ order, paymentStatus, user }) => {
+  const details = getOrderEmailBase({ order, user });
+  const isPaid = paymentStatus === 'paid';
+  const title = isPaid ? 'Payment successful' : 'Payment needs attention';
+  const bodyText = isPaid
+    ? `Payment for order ${details.orderNumber} was successful.`
+    : `Payment for order ${details.orderNumber} was not completed.`;
+  const html = buildShell({
+    body: `
+      <p style="font-size:15px;line-height:1.7;margin:0 0 12px">
+        Hi ${escapeHtml(details.customerName)}, ${escapeHtml(bodyText)}
+      </p>
+      <p style="font-size:15px;line-height:1.7;margin:0">
+        Amount: ${escapeHtml(formatCurrency(details.total, details.currency))}.
+      </p>
+      ${buildButton(details.orderUrl, 'View order')}
+    `,
+    preheader: bodyText,
+    title,
+  });
+
+  return sendTransactionalEmail({
+    clientReference: `order-payment:${paymentStatus}:${details.orderNumber}`,
+    html,
+    recipientEmail: details.customerEmail,
+    recipientName: details.customerName,
+    subject: `${title} for order ${details.orderNumber}`,
+    text: `${bodyText} Amount: ${formatCurrency(details.total, details.currency)}.`,
+  });
+};
+
+const sendOrderStatusEmail = async ({ order, previousStatus = '', user }) => {
+  const details = getOrderEmailBase({ order, user });
+  const statusLabel = formatLabel(order.status);
+  const previousStatusLabel = formatLabel(previousStatus);
+  const trackingUrl = order.shipment?.trackingUrl || order.trackingUrl || '';
+  const html = buildShell({
+    body: `
+      <p style="font-size:15px;line-height:1.7;margin:0 0 12px">
+        Hi ${escapeHtml(details.customerName)}, order ${escapeHtml(details.orderNumber)} is now ${escapeHtml(statusLabel)}.
+      </p>
+      ${previousStatusLabel ? `
+        <p style="font-size:15px;line-height:1.7;margin:0 0 12px">
+          Previous status: ${escapeHtml(previousStatusLabel)}.
+        </p>
+      ` : ''}
+      ${trackingUrl ? `
+        <p style="font-size:15px;line-height:1.7;margin:0 0 12px">
+          Tracking link: <a href="${escapeHtml(trackingUrl)}">${escapeHtml(trackingUrl)}</a>
+        </p>
+      ` : ''}
+      ${buildButton(details.orderUrl, 'View order')}
+    `,
+    preheader: `Order ${details.orderNumber} is now ${statusLabel}.`,
+    title: `Order ${statusLabel}`,
+  });
+
+  return sendTransactionalEmail({
+    clientReference: `order-status:${order.status}:${details.orderNumber}`,
+    html,
+    recipientEmail: details.customerEmail,
+    recipientName: details.customerName,
+    subject: `Order ${details.orderNumber} is ${statusLabel}`,
+    text: `Order ${details.orderNumber} is now ${statusLabel}.`,
+  });
+};
+
+const sendRefundEmail = async ({ order, refund, user }) => {
+  const details = getOrderEmailBase({ order, user });
+  const refundStatus = formatLabel(refund.status || 'pending');
+  const amount = refund.amount ?? 0;
+  const html = buildShell({
+    body: `
+      <p style="font-size:15px;line-height:1.7;margin:0 0 12px">
+        Hi ${escapeHtml(details.customerName)}, refund status for order ${escapeHtml(details.orderNumber)} is ${escapeHtml(refundStatus)}.
+      </p>
+      <p style="font-size:15px;line-height:1.7;margin:0">
+        Refund amount: ${escapeHtml(formatCurrency(amount, refund.currency || details.currency))}.
+      </p>
+      ${buildButton(details.orderUrl, 'View order')}
+    `,
+    preheader: `Refund ${refundStatus} for order ${details.orderNumber}.`,
+    title: `Refund ${refundStatus}`,
+  });
+
+  return sendTransactionalEmail({
+    clientReference: `refund:${refund.status}:${refund._id?.toString?.() || refund.id || details.orderNumber}`,
+    html,
+    recipientEmail: details.customerEmail,
+    recipientName: details.customerName,
+    subject: `Refund ${refundStatus} for order ${details.orderNumber}`,
+    text: `Refund ${refundStatus} for order ${details.orderNumber}. Amount: ${formatCurrency(amount, refund.currency || details.currency)}.`,
+  });
+};
+
+export {
+  EMAIL_PROVIDERS,
+  escapeHtml,
+  getResetPasswordUrl,
+  sendInvoiceEmail,
+  sendOrderPaymentEmail,
+  sendOrderPlacedEmail,
+  sendOrderStatusEmail,
+  sendPasswordResetEmail,
+  sendRefundEmail,
+  sendReviewReminderEmail,
+  sendTransactionalEmail,
+};
+
+export default {
+  EMAIL_PROVIDERS,
+  escapeHtml,
+  getResetPasswordUrl,
+  sendInvoiceEmail,
+  sendOrderPaymentEmail,
+  sendOrderPlacedEmail,
+  sendOrderStatusEmail,
+  sendPasswordResetEmail,
+  sendRefundEmail,
+  sendReviewReminderEmail,
+  sendTransactionalEmail,
+};

@@ -225,12 +225,13 @@ The module prevents duplicate reminders with:
 
 Current mode:
 
-- `REVIEW_REMINDER_EMAIL_MODE=log`
+- Review reminders use the shared transactional email service.
+- Set `EMAIL_PROVIDER=zeptomail` and the ZeptoMail sender env vars for production delivery.
 
 Current behavior:
 
-- generates the final payload and logs it through the backend logger
-- does not yet connect to a real outbound email provider
+- sends through ZeptoMail when configured
+- logs the final email metadata when `EMAIL_PROVIDER=log`
 
 Review link format:
 
@@ -258,7 +259,9 @@ Review link format:
 - `REVIEW_REMINDER_JOB_INTERVAL_MS`
 - `REVIEW_REMINDER_MAX_ATTEMPTS`
 - `REVIEW_REMINDER_BATCH_SIZE`
-- `REVIEW_REMINDER_EMAIL_MODE`
+- `EMAIL_PROVIDER`
+- `EMAIL_FROM_ADDRESS`
+- `ZEPTO_MAIL_SEND_TOKEN`
 
 ## Tests Added
 
@@ -268,5 +271,5 @@ Review link format:
 
 ## Current Limitations
 
-- Reminder delivery is implemented as job processing plus logged payloads; a real email transport still needs to be connected.
+- Reminder delivery depends on a configured production email provider and verified sender domain.
 - The current automated tests are unit-level. End-to-end DB-backed moderation and reminder processing tests still need to be added later.

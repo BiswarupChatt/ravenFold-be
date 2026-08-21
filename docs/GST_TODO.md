@@ -11,5 +11,6 @@
 
 ## Invoice Email
 
-- Add backend email service integration for sending generated invoice PDFs to the customer email address.
-- Enable the admin invoice preview action `Send invoice to customer email` after the email server is implemented.
+- Backend email service integration is implemented for generated invoice PDFs.
+- Admin invoice preview action `Send invoice to customer email` is enabled.
+- Configure ZeptoMail production env and test delivery with a real verified sender before launch.

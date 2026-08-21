@@ -25,6 +25,7 @@ import OrderItem from '@/modules/order/models/order-item.model.js';
 import OrderStatusHistory from '@/modules/order/models/order-status-history.model.js';
 import Order from '@/modules/order/models/order.model.js';
 import boxTypeService from '@/modules/box-type/services/box-type.service.js';
+import { sendOrderStatusEmail } from '@/infrastructure/email/email.service.js';
 import reviewReminderService from '@/modules/review/services/review-reminder.service.js';
 import ShipmentEvent from '@/modules/shipping/models/shipment-event.model.js';
 import Shipment from '@/modules/shipping/models/shipment.model.js';
@@ -174,6 +175,31 @@ const appendOrderStatusHistory = async ({ actorId, fromPaymentStatus, fromStatus
   });
 };
 
+const sendOrderStatusEmailSafely = async ({ order, previousStatus }) => {
+  try {
+    const result = await sendOrderStatusEmail({
+      order,
+      previousStatus,
+      user: order.userId && typeof order.userId === 'object' ? order.userId : null,
+    });
+
+    logger.info('Shipping order status email sent', {
+      emailProvider: result?.provider || '',
+      emailStatus: result?.status || '',
+      orderId: getDocumentId(order._id),
+      orderNumber: order.orderNumber || '',
+      status: order.status,
+    });
+  } catch (error) {
+    logger.error('Failed to send shipping order status email', {
+      error: error?.message || error,
+      orderId: getDocumentId(order._id),
+      orderNumber: order.orderNumber || '',
+      status: order.status,
+    });
+  }
+};
+
 const updateOrderStatus = async ({ actorId, nextStatus, note, order }) => {
   if (!nextStatus || order.status === nextStatus) {
     return;
@@ -195,6 +221,11 @@ const updateOrderStatus = async ({ actorId, nextStatus, note, order }) => {
     fromStatus,
     note,
     order,
+  });
+
+  await sendOrderStatusEmailSafely({
+    order,
+    previousStatus: fromStatus,
   });
 
   if (nextStatus === ORDER_STATUS.DELIVERED) {

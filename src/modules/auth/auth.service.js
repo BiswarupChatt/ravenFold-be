@@ -2,11 +2,13 @@ import mongoose from 'mongoose';
 
 import ApiError from '@/common/errors/api.error.js';
 import ROLES from '@/common/constants/roles.constant.js';
+import logger from '@/common/logger/logger.js';
 import User from '@/modules/users/models/user.model.js';
 import { nodeEnv } from '@/config/env.config.js';
 import { sendSuccess } from '@/common/helpers/response.helper.js';
 import { signToken } from '@/common/utils/jwt.util.js';
 import { hashPassword, verifyPassword } from '@/common/utils/password.util.js';
+import { sendPasswordResetEmail } from '@/infrastructure/email/email.service.js';
 import { normalizeUserNameParts } from '@/common/utils/user-name.util.js';
 import { verifyFacebookToken } from '@/modules/auth/providers/facebook.provider.js';
 import { verifyGoogleToken } from '@/modules/auth/providers/google.provider.js';
@@ -392,14 +394,31 @@ const requestPasswordResetForEmail = async (payload = {}, requestContext = {}) =
 
   const user = await findUserByEmail(email, { includePassword: true });
   let resetToken = '';
+  let delivery = 'skipped';
 
   if (user?.passwordHash && user.isActive !== false) {
     resetToken = await passwordResetService.createPasswordResetToken(user, requestContext);
+
+    try {
+      const result = await sendPasswordResetEmail({
+        resetToken,
+        user,
+      });
+
+      delivery = result.provider || result.status || 'sent';
+    } catch (error) {
+      delivery = 'failed';
+      logger.error('Failed to send password reset email', {
+        email,
+        error: error?.message || error,
+        userId: user._id.toString(),
+      });
+    }
   }
 
   return {
-    delivery: 'log',
-    message: 'If the account exists, password reset instructions have been generated.',
+    delivery,
+    message: 'If the account exists, password reset instructions will be sent.',
     ...(nodeEnv === 'production' || !resetToken ? {} : { resetToken }),
   };
 };
