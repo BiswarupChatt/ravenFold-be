@@ -36,6 +36,7 @@ export const mongoUri = process.env.MONGO_URI || '';
 export const mongoDbName = process.env.MONGO_DB_NAME || 'ravenfold';
 export const jwtSecret = process.env.JWT_SECRET || '';
 export const jwtExpiresIn = process.env.JWT_EXPIRES_IN || '7d';
+export const adminJwtExpiresIn = process.env.ADMIN_JWT_EXPIRES_IN || '1h';
 export const authLoginThrottleMaxAttempts = Number(process.env.AUTH_LOGIN_THROTTLE_MAX_ATTEMPTS) || 5;
 export const authLoginThrottleWindowMs = Number(process.env.AUTH_LOGIN_THROTTLE_WINDOW_MS) || 900000;
 export const authLoginThrottleLockoutMs = Number(process.env.AUTH_LOGIN_THROTTLE_LOCKOUT_MS) || 1800000;
@@ -94,6 +95,7 @@ export const whatsappWebhookVerifyToken = process.env.WHATSAPP_WEBHOOK_VERIFY_TO
 
 export default {
   adminUrl,
+  adminJwtExpiresIn,
   apiPrefix,
   authLoginThrottleLockoutMs,
   authLoginThrottleMaxAttempts,

@@ -4,7 +4,7 @@ import ApiError from '@/common/errors/api.error.js';
 import ROLES from '@/common/constants/roles.constant.js';
 import logger from '@/common/logger/logger.js';
 import User from '@/modules/users/models/user.model.js';
-import { nodeEnv } from '@/config/env.config.js';
+import { adminJwtExpiresIn, nodeEnv } from '@/config/env.config.js';
 import { sendSuccess } from '@/common/helpers/response.helper.js';
 import { signToken } from '@/common/utils/jwt.util.js';
 import { hashPassword, verifyPassword } from '@/common/utils/password.util.js';
@@ -12,6 +12,7 @@ import { sendPasswordResetEmail } from '@/infrastructure/email/email.service.js'
 import { normalizeUserNameParts } from '@/common/utils/user-name.util.js';
 import { verifyFacebookToken } from '@/modules/auth/providers/facebook.provider.js';
 import { verifyGoogleToken } from '@/modules/auth/providers/google.provider.js';
+import adminMfaService from '@/modules/auth/services/admin-mfa.service.js';
 import loginThrottleService from '@/modules/auth/services/login-throttle.service.js';
 import passwordResetService from '@/modules/auth/services/password-reset.service.js';
 import { formatUserProfile, getCurrentUserProfile } from '@/modules/users/services/user.service.js';
@@ -79,14 +80,14 @@ const getRegistrationRole = (role) => {
 
 const formatUser = formatUserProfile;
 
-const createAuthResponse = (user) => {
+const createAuthResponse = (user, options = {}) => {
   const formattedUser = formatUser(user);
   const token = signToken({
     sub: formattedUser.id,
     email: formattedUser.email,
     role: formattedUser.role,
     roles: formattedUser.roles,
-  });
+  }, options.tokenOptions || {});
 
   return {
     token,
@@ -290,7 +291,59 @@ const assertAdminAuthResponse = (authResponse) => {
 };
 
 const loginAdminUser = async (payload, requestContext = {}) => {
-  return assertAdminAuthResponse(await loginUser(payload, requestContext));
+  const email = normalizeEmail(payload?.email);
+  const password = payload?.password;
+
+  if (!email || !password) {
+    throw new ApiError(400, 'Email and password are required');
+  }
+
+  await loginThrottleService.assertLoginAllowed({
+    email,
+    ipAddress: requestContext.ipAddress,
+  });
+
+  const user = await findUserByEmail(email, { includePassword: true });
+
+  if (user?.isActive === false) {
+    throw new ApiError(403, 'This account is inactive');
+  }
+
+  const passwordMatches = user ? await verifyPassword(password, user.passwordHash) : false;
+
+  if (!passwordMatches) {
+    await loginThrottleService.recordLoginFailure({
+      email,
+      ipAddress: requestContext.ipAddress,
+    });
+    throw new ApiError(401, 'Invalid email or password');
+  }
+
+  const roles = Array.isArray(user.roles) ? user.roles : [user.role].filter(Boolean);
+
+  if (!roles.includes(ROLES.ADMIN) && !roles.includes(ROLES.SUPER_ADMIN)) {
+    await loginThrottleService.recordLoginFailure({
+      email,
+      ipAddress: requestContext.ipAddress,
+    });
+    throw new ApiError(403, 'Admin access required');
+  }
+
+  await adminMfaService.verifyAdminLoginMfa({
+    code: payload?.mfaCode,
+    user,
+  });
+
+  await loginThrottleService.clearLoginThrottle({
+    email,
+    ipAddress: requestContext.ipAddress,
+  });
+
+  return assertAdminAuthResponse(createAuthResponse(user, {
+    tokenOptions: {
+      expiresIn: adminJwtExpiresIn,
+    },
+  }));
 };
 
 const verifyOtpPayload = async (payload) => {
@@ -506,11 +559,30 @@ const changePassword = async (req, res) => {
   return sendSuccess(res, await changePasswordForUser(req.user, req.body), 'Password updated successfully');
 };
 
+const getAdminMfa = async (req, res) => {
+  return sendSuccess(res, await adminMfaService.getAdminMfaStatus(req.user), 'Admin MFA status fetched');
+};
+
+const setupAdminMfa = async (req, res) => {
+  return sendSuccess(res, await adminMfaService.createAdminMfaSetup(req.user), 'Admin MFA setup generated');
+};
+
+const enableAdminMfa = async (req, res) => {
+  return sendSuccess(res, await adminMfaService.enableAdminMfa(req.user, req.body), 'Admin MFA enabled');
+};
+
+const disableAdminMfa = async (req, res) => {
+  return sendSuccess(res, await adminMfaService.disableAdminMfa(req.user, req.body), 'Admin MFA disabled');
+};
+
 export {
   authenticateProviderUser,
   changePassword,
   changePasswordForUser,
+  disableAdminMfa,
+  enableAdminMfa,
   facebookAuth,
+  getAdminMfa,
   getAuthenticatedUser,
   getMe,
   getStatus,
@@ -525,6 +597,7 @@ export {
   registerUser,
   resetPassword,
   resetPasswordWithToken,
+  setupAdminMfa,
   verifyOtp,
   verifyOtpPayload,
 };
@@ -532,7 +605,10 @@ export {
 export default {
   authenticateProviderUser,
   changePassword,
+  disableAdminMfa,
+  enableAdminMfa,
   facebookAuth,
+  getAdminMfa,
   getAuthenticatedUser,
   getMe,
   getStatus,
@@ -545,6 +621,7 @@ export default {
   register,
   registerUser,
   resetPassword,
+  setupAdminMfa,
   verifyOtp,
   verifyOtpPayload,
 };

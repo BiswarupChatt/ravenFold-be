@@ -91,6 +91,30 @@ const userSchema = new mongoose.Schema(
       ],
       default: [],
     },
+    adminMfa: {
+      enabled: {
+        type: Boolean,
+        default: false,
+      },
+      enabledAt: {
+        type: Date,
+        default: null,
+      },
+      lastVerifiedAt: {
+        type: Date,
+        default: null,
+      },
+      pendingSecretEncrypted: {
+        type: String,
+        trim: true,
+        default: '',
+      },
+      secretEncrypted: {
+        type: String,
+        trim: true,
+        default: '',
+      },
+    },
     role: {
       type: String,
       enum: allowedRoles,
@@ -116,12 +140,14 @@ const userSchema = new mongoose.Schema(
     versionKey: false,
     toJSON: {
       transform: (doc, ret) => {
+        delete ret.adminMfa;
         delete ret.passwordHash;
         return ret;
       },
     },
     toObject: {
       transform: (doc, ret) => {
+        delete ret.adminMfa;
         delete ret.passwordHash;
         return ret;
       },

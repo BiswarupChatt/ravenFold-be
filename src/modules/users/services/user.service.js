@@ -55,6 +55,7 @@ const formatUserProfile = (user) => {
     role: user.role,
     roles: user.roles || [user.role],
     authProviders: user.authProviders?.map((account) => account.provider) || [],
+    adminMfaEnabled: Boolean(user.adminMfa?.enabled),
     createdAt: user.createdAt,
     updatedAt: user.updatedAt,
   };

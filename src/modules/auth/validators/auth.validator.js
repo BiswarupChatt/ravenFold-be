@@ -9,7 +9,9 @@ import {
 
 const registerFields = ['email', 'password', 'firstName', 'lastName', 'name', 'phone', 'role'];
 const loginFields = ['email', 'password'];
+const adminLoginFields = ['email', 'password', 'mfaCode'];
 const changePasswordFields = ['currentPassword', 'newPassword'];
+const adminMfaCodeFields = ['code'];
 const requestPasswordResetFields = ['email'];
 const resetPasswordFields = ['token', 'newPassword'];
 const googleFields = ['accessToken', 'token', 'idToken', 'credential'];
@@ -35,6 +37,16 @@ const loginSchema = createSchema((value) => {
   return pickAllowedKeys(payload, loginFields);
 });
 
+const adminLoginSchema = createSchema((value) => {
+  const payload = expectObject(value);
+
+  assertNoUnknownKeys(payload, adminLoginFields);
+  assertRequiredKeys(payload, ['email', 'password']);
+  adminLoginFields.forEach((field) => assertStringLikeField(payload, field));
+
+  return pickAllowedKeys(payload, adminLoginFields);
+});
+
 const changePasswordSchema = createSchema((value) => {
   const payload = expectObject(value);
 
@@ -43,6 +55,16 @@ const changePasswordSchema = createSchema((value) => {
   changePasswordFields.forEach((field) => assertStringLikeField(payload, field));
 
   return pickAllowedKeys(payload, changePasswordFields);
+});
+
+const adminMfaCodeSchema = createSchema((value) => {
+  const payload = expectObject(value);
+
+  assertNoUnknownKeys(payload, adminMfaCodeFields);
+  assertRequiredKeys(payload, adminMfaCodeFields);
+  adminMfaCodeFields.forEach((field) => assertStringLikeField(payload, field));
+
+  return pickAllowedKeys(payload, adminMfaCodeFields);
 });
 
 const requestPasswordResetSchema = createSchema((value) => {
@@ -84,6 +106,8 @@ const facebookAuthSchema = createSchema((value) => {
 });
 
 export {
+  adminLoginSchema,
+  adminMfaCodeSchema,
   changePasswordSchema,
   facebookAuthSchema,
   googleAuthSchema,
