@@ -1,7 +1,7 @@
 import { createHash, randomBytes } from 'node:crypto';
 
 import logger from '@/common/logger/logger.js';
-import { nodeEnv, passwordResetTokenTtlMs } from '@/config/env.config.js';
+import { passwordResetTokenTtlMs } from '@/config/env.config.js';
 import PasswordResetToken from '@/modules/auth/models/password-reset-token.model.js';
 
 const hashResetToken = (token) => createHash('sha256').update(String(token || '')).digest('hex');
@@ -35,7 +35,6 @@ const createPasswordResetToken = async (user, context = {}) => {
   logger.info('Password reset token created', {
     email: user.email,
     expiresAt: expiresAt.toISOString(),
-    resetToken: nodeEnv === 'production' ? undefined : rawToken,
     userId: user._id.toString(),
   });
 

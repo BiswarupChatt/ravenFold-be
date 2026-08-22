@@ -25,7 +25,7 @@ import OrderItem from '@/modules/order/models/order-item.model.js';
 import OrderStatusHistory from '@/modules/order/models/order-status-history.model.js';
 import Order from '@/modules/order/models/order.model.js';
 import boxTypeService from '@/modules/box-type/services/box-type.service.js';
-import { sendOrderStatusEmail } from '@/infrastructure/email/email.service.js';
+import { sendShipmentStatusEmail } from '@/infrastructure/email/email.service.js';
 import reviewReminderService from '@/modules/review/services/review-reminder.service.js';
 import ShipmentEvent from '@/modules/shipping/models/shipment-event.model.js';
 import Shipment from '@/modules/shipping/models/shipment.model.js';
@@ -175,27 +175,57 @@ const appendOrderStatusHistory = async ({ actorId, fromPaymentStatus, fromStatus
   });
 };
 
-const sendOrderStatusEmailSafely = async ({ order, previousStatus }) => {
+const getShipmentEmailLifecycleStatus = (status = '') => {
+  if ([SHIPMENT_STATUS.IN_TRANSIT, SHIPMENT_STATUS.PICKED_UP].includes(status)) {
+    return ORDER_STATUS.SHIPPED;
+  }
+
+  if (status === SHIPMENT_STATUS.OUT_FOR_DELIVERY) {
+    return SHIPMENT_STATUS.OUT_FOR_DELIVERY;
+  }
+
+  if (status === SHIPMENT_STATUS.DELIVERED) {
+    return ORDER_STATUS.DELIVERED;
+  }
+
+  return '';
+};
+
+const shouldSendShipmentStatusEmail = ({ previousStatus = '', status = '' }) => {
+  const previousLifecycleStatus = getShipmentEmailLifecycleStatus(previousStatus);
+  const nextLifecycleStatus = getShipmentEmailLifecycleStatus(status);
+
+  return Boolean(nextLifecycleStatus && nextLifecycleStatus !== previousLifecycleStatus);
+};
+
+const sendShipmentStatusEmailSafely = async ({ order, previousStatus = '', shipment }) => {
+  if (!shouldSendShipmentStatusEmail({ previousStatus, status: shipment.status })) {
+    return;
+  }
+
   try {
-    const result = await sendOrderStatusEmail({
+    const result = await sendShipmentStatusEmail({
       order,
-      previousStatus,
+      shipment,
+      shipmentStatus: shipment.status,
       user: order.userId && typeof order.userId === 'object' ? order.userId : null,
     });
 
-    logger.info('Shipping order status email sent', {
+    logger.info('Shipment status email sent', {
       emailProvider: result?.provider || '',
       emailStatus: result?.status || '',
       orderId: getDocumentId(order._id),
       orderNumber: order.orderNumber || '',
-      status: order.status,
+      shipmentId: getDocumentId(shipment._id),
+      shipmentStatus: shipment.status,
     });
   } catch (error) {
-    logger.error('Failed to send shipping order status email', {
+    logger.error('Failed to send shipment status email', {
       error: error?.message || error,
       orderId: getDocumentId(order._id),
       orderNumber: order.orderNumber || '',
-      status: order.status,
+      shipmentId: getDocumentId(shipment._id),
+      shipmentStatus: shipment.status,
     });
   }
 };
@@ -221,11 +251,6 @@ const updateOrderStatus = async ({ actorId, nextStatus, note, order }) => {
     fromStatus,
     note,
     order,
-  });
-
-  await sendOrderStatusEmailSafely({
-    order,
-    previousStatus: fromStatus,
   });
 
   if (nextStatus === ORDER_STATUS.DELIVERED) {
@@ -548,6 +573,12 @@ const createProviderOrderForOrder = async (actor, orderId, payload = {}) => {
       order,
     });
 
+    await sendShipmentStatusEmailSafely({
+      order,
+      previousStatus: '',
+      shipment,
+    });
+
     return formatShipment(shipment.toObject());
   } finally {
     providerOrderCreationLocks.delete(lockKey);
@@ -603,6 +634,12 @@ const syncShipmentTracking = async (actor, shipmentId, payload = {}) => {
     nextStatus: getOrderStatusFromShipmentStatus(status, order.status),
     note: `Tracking synced for shipment ${shipment.awbCode || shipment._id.toString()}`,
     order,
+  });
+
+  await sendShipmentStatusEmailSafely({
+    order,
+    previousStatus,
+    shipment,
   });
 
   return formatShipment(shipment.toObject());
@@ -768,6 +805,12 @@ const handleShiprocketWebhook = async (req) => {
     nextStatus: getOrderStatusFromShipmentStatus(status, order.status),
     note: `Shiprocket webhook updated shipment ${shipment.awbCode || shipment._id.toString()}`,
     order,
+  });
+
+  await sendShipmentStatusEmailSafely({
+    order,
+    previousStatus,
+    shipment,
   });
 
   return {

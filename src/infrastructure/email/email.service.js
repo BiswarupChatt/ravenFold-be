@@ -101,22 +101,28 @@ const getOrderDetailsUrl = (order) => {
   return `${baseUrl}/profile/order?orderId=${encodeURIComponent(order._id?.toString?.() || order.id || '')}`;
 };
 
-const summarizeOrderItems = (items = []) => {
-  const safeItems = Array.isArray(items) ? items : [];
+const getShipmentTrackingId = (shipment = {}) => (
+  normalizeText(shipment.awbCode)
+  || normalizeText(shipment.providerShipmentId)
+  || normalizeText(shipment.providerOrderId)
+);
 
-  if (!safeItems.length) {
-    return 'your order items';
+const getShipmentLifecycleStatus = (status = '') => {
+  const normalizedStatus = normalizeText(status).toLowerCase();
+
+  if (['picked_up', 'in_transit'].includes(normalizedStatus)) {
+    return 'shipped';
   }
 
-  return safeItems
-    .slice(0, 3)
-    .map((item) => {
-      const name = item.productSnapshot?.name || item.name || 'Product';
-      const quantity = Number(item.quantity || 0);
+  if (normalizedStatus === 'out_for_delivery') {
+    return 'out_for_delivery';
+  }
 
-      return `${name}${quantity > 1 ? ` x ${quantity}` : ''}`;
-    })
-    .join(', ');
+  if (normalizedStatus === 'delivered') {
+    return 'delivered';
+  }
+
+  return '';
 };
 
 const getOrderEmailBase = ({ order = {}, user = null }) => ({
@@ -350,6 +356,11 @@ const sendTransactionalEmail = async (input = {}) => {
 
 const sendPasswordResetEmail = async ({ resetToken, user }) => {
   const resetUrl = getResetPasswordUrl(resetToken);
+
+  if (!resetUrl) {
+    throw new ApiError(500, 'FRONTEND_URL must be configured before password reset emails can be sent');
+  }
+
   const html = buildShell({
     body: `
       <p style="font-size:15px;line-height:1.7;margin:0 0 12px">
@@ -360,7 +371,7 @@ const sendPasswordResetEmail = async ({ resetToken, user }) => {
         If the button does not work, open this link:
       </p>
       <p style="font-size:13px;line-height:1.6;margin:0;word-break:break-all">
-        ${escapeHtml(resetUrl || resetToken)}
+        ${escapeHtml(resetUrl)}
       </p>
       <p style="font-size:14px;line-height:1.7;margin:18px 0 0">
         Ignore this email if you did not request a password reset.
@@ -376,7 +387,7 @@ const sendPasswordResetEmail = async ({ resetToken, user }) => {
     recipientEmail: user.email,
     recipientName: user.name || `${user.firstName || ''} ${user.lastName || ''}`.trim(),
     subject: 'Reset your Raven Fold password',
-    text: `Reset your Raven Fold password: ${resetUrl || resetToken}`,
+    text: `Reset your Raven Fold password: ${resetUrl}`,
   });
 };
 
@@ -449,41 +460,12 @@ const sendInvoiceEmail = async ({ invoice, pdfBuffer }) => {
   });
 };
 
-const sendOrderPlacedEmail = async ({ items = [], order, user }) => {
-  const details = getOrderEmailBase({ order, user });
-  const html = buildShell({
-    body: `
-      <p style="font-size:15px;line-height:1.7;margin:0 0 12px">
-        Hi ${escapeHtml(details.customerName)}, we received your order ${escapeHtml(details.orderNumber)}.
-      </p>
-      <p style="font-size:15px;line-height:1.7;margin:0">
-        Items: ${escapeHtml(summarizeOrderItems(items))}. Total: ${escapeHtml(formatCurrency(details.total, details.currency))}.
-      </p>
-      ${buildButton(details.orderUrl, 'View order')}
-      <p style="font-size:14px;line-height:1.7;margin:18px 0 0">
-        We will confirm the order after payment is completed.
-      </p>
-    `,
-    preheader: `We received order ${details.orderNumber}.`,
-    title: 'Order received',
-  });
-
-  return sendTransactionalEmail({
-    clientReference: `order-placed:${details.orderNumber}`,
-    html,
-    recipientEmail: details.customerEmail,
-    recipientName: details.customerName,
-    subject: `Order received ${details.orderNumber}`,
-    text: `We received your order ${details.orderNumber}. Total: ${formatCurrency(details.total, details.currency)}.`,
-  });
-};
-
 const sendOrderPaymentEmail = async ({ order, paymentStatus, user }) => {
   const details = getOrderEmailBase({ order, user });
   const isPaid = paymentStatus === 'paid';
-  const title = isPaid ? 'Payment successful' : 'Payment needs attention';
+  const title = isPaid ? 'Order confirmed' : 'Payment failed';
   const bodyText = isPaid
-    ? `Payment for order ${details.orderNumber} was successful.`
+    ? `Your order ${details.orderNumber} is confirmed and payment is complete.`
     : `Payment for order ${details.orderNumber} was not completed.`;
   const html = buildShell({
     body: `
@@ -504,24 +486,63 @@ const sendOrderPaymentEmail = async ({ order, paymentStatus, user }) => {
     html,
     recipientEmail: details.customerEmail,
     recipientName: details.customerName,
-    subject: `${title} for order ${details.orderNumber}`,
+    subject: isPaid ? `Order confirmed ${details.orderNumber}` : `Payment failed for order ${details.orderNumber}`,
     text: `${bodyText} Amount: ${formatCurrency(details.total, details.currency)}.`,
   });
 };
 
-const sendOrderStatusEmail = async ({ order, previousStatus = '', user }) => {
+const sendShipmentStatusEmail = async ({
+  order,
+  shipment = {},
+  shipmentStatus = '',
+  user,
+}) => {
   const details = getOrderEmailBase({ order, user });
-  const statusLabel = formatLabel(order.status);
-  const previousStatusLabel = formatLabel(previousStatus);
-  const trackingUrl = order.shipment?.trackingUrl || order.trackingUrl || '';
+  const lifecycleStatus = getShipmentLifecycleStatus(shipmentStatus || shipment.status);
+  const trackingId = getShipmentTrackingId(shipment);
+  const trackingUrl = normalizeText(shipment.trackingUrl);
+  const courierName = normalizeText(shipment.courierName) || formatLabel(shipment.provider || 'courier');
+  const statusLabels = {
+    delivered: {
+      body: `Order ${details.orderNumber} has been delivered.`,
+      preheader: `Order ${details.orderNumber} has been delivered.`,
+      subject: `Order delivered ${details.orderNumber}`,
+      title: 'Order delivered',
+    },
+    out_for_delivery: {
+      body: `Order ${details.orderNumber} is out for delivery today.`,
+      preheader: `Order ${details.orderNumber} is out for delivery.`,
+      subject: `Order out for delivery ${details.orderNumber}`,
+      title: 'Order out for delivery',
+    },
+    shipped: {
+      body: `Order ${details.orderNumber} has been shipped.`,
+      preheader: trackingId
+        ? `Order ${details.orderNumber} shipped. Tracking ID: ${trackingId}.`
+        : `Order ${details.orderNumber} has been shipped.`,
+      subject: `Order shipped ${details.orderNumber}`,
+      title: 'Order shipped',
+    },
+  };
+  const content = statusLabels[lifecycleStatus];
+
+  if (!content) {
+    throw new ApiError(400, 'shipmentStatus must be shipped, out_for_delivery, or delivered');
+  }
+
   const html = buildShell({
     body: `
       <p style="font-size:15px;line-height:1.7;margin:0 0 12px">
-        Hi ${escapeHtml(details.customerName)}, order ${escapeHtml(details.orderNumber)} is now ${escapeHtml(statusLabel)}.
+        Hi ${escapeHtml(details.customerName)}, ${escapeHtml(content.body)}
       </p>
-      ${previousStatusLabel ? `
+      ${trackingId ? `
         <p style="font-size:15px;line-height:1.7;margin:0 0 12px">
-          Previous status: ${escapeHtml(previousStatusLabel)}.
+          Tracking ID: <strong>${escapeHtml(trackingId)}</strong>
+        </p>
+      ` : ''}
+      ${courierName ? `
+        <p style="font-size:15px;line-height:1.7;margin:0 0 12px">
+          Courier: ${escapeHtml(courierName)}
         </p>
       ` : ''}
       ${trackingUrl ? `
@@ -531,17 +552,22 @@ const sendOrderStatusEmail = async ({ order, previousStatus = '', user }) => {
       ` : ''}
       ${buildButton(details.orderUrl, 'View order')}
     `,
-    preheader: `Order ${details.orderNumber} is now ${statusLabel}.`,
-    title: `Order ${statusLabel}`,
+    preheader: content.preheader,
+    title: content.title,
   });
 
   return sendTransactionalEmail({
-    clientReference: `order-status:${order.status}:${details.orderNumber}`,
+    clientReference: `shipment-status:${lifecycleStatus}:${details.orderNumber}:${trackingId || shipment._id?.toString?.() || shipment.id || ''}`,
     html,
     recipientEmail: details.customerEmail,
     recipientName: details.customerName,
-    subject: `Order ${details.orderNumber} is ${statusLabel}`,
-    text: `Order ${details.orderNumber} is now ${statusLabel}.`,
+    subject: content.subject,
+    text: [
+      content.body,
+      trackingId ? `Tracking ID: ${trackingId}.` : '',
+      courierName ? `Courier: ${courierName}.` : '',
+      trackingUrl ? `Tracking link: ${trackingUrl}.` : '',
+    ].filter(Boolean).join(' '),
   });
 };
 
@@ -579,11 +605,10 @@ export {
   getResetPasswordUrl,
   sendInvoiceEmail,
   sendOrderPaymentEmail,
-  sendOrderPlacedEmail,
-  sendOrderStatusEmail,
   sendPasswordResetEmail,
   sendRefundEmail,
   sendReviewReminderEmail,
+  sendShipmentStatusEmail,
   sendTransactionalEmail,
 };
 
@@ -593,10 +618,9 @@ export default {
   getResetPasswordUrl,
   sendInvoiceEmail,
   sendOrderPaymentEmail,
-  sendOrderPlacedEmail,
-  sendOrderStatusEmail,
   sendPasswordResetEmail,
   sendRefundEmail,
   sendReviewReminderEmail,
+  sendShipmentStatusEmail,
   sendTransactionalEmail,
 };

@@ -396,7 +396,7 @@ const requestPasswordResetForEmail = async (payload = {}, requestContext = {}) =
   let resetToken = '';
   let delivery = 'skipped';
 
-  if (user?.passwordHash && user.isActive !== false) {
+  if (user && user.isActive !== false) {
     resetToken = await passwordResetService.createPasswordResetToken(user, requestContext);
 
     try {
@@ -418,8 +418,7 @@ const requestPasswordResetForEmail = async (payload = {}, requestContext = {}) =
 
   return {
     delivery,
-    message: 'If the account exists, password reset instructions will be sent.',
-    ...(nodeEnv === 'production' || !resetToken ? {} : { resetToken }),
+    message: 'Request received. If this email is registered with RavenFold, we will send a password reset link. The link can also set a password for accounts created with Google.',
   };
 };
 
