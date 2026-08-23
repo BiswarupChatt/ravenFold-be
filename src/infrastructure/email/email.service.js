@@ -7,6 +7,7 @@ import {
   emailReplyToAddress,
   emailReplyToName,
   emailRequestTimeoutMs,
+  contactSupportEmail,
   frontendUrl,
   zeptoMailApiUrl,
   zeptoMailSendToken,
@@ -195,6 +196,8 @@ const createEmailPayload = ({
   html,
   recipientEmail,
   recipientName = '',
+  replyToEmail = '',
+  replyToName = '',
   subject,
   text,
 }) => {
@@ -234,11 +237,14 @@ const createEmailPayload = ({
     throw new ApiError(400, 'email html or text body is required');
   }
 
-  if (emailReplyToAddress) {
+  const replyAddress = replyToEmail || emailReplyToAddress;
+  const replyName = replyToName || emailReplyToName;
+
+  if (replyAddress) {
     payload.reply_to = [
       {
-        address: normalizeEmailAddress(emailReplyToAddress, 'EMAIL_REPLY_TO_ADDRESS'),
-        name: normalizeText(emailReplyToName),
+        address: normalizeEmailAddress(replyAddress, 'replyToEmail'),
+        name: normalizeText(replyName),
       },
     ];
   }
@@ -599,10 +605,58 @@ const sendRefundEmail = async ({ order, refund, user }) => {
   });
 };
 
+const sendContactInquiryEmail = async ({
+  email,
+  message,
+  name,
+  orderNumber = '',
+  topic = 'Contact inquiry',
+}) => {
+  const customerEmail = normalizeEmailAddress(email, 'email');
+  const customerName = normalizeText(name);
+  const normalizedTopic = normalizeText(topic) || 'Contact inquiry';
+  const normalizedOrderNumber = normalizeText(orderNumber);
+  const normalizedMessage = normalizeText(message);
+  const html = buildShell({
+    body: `
+      <p style="font-size:15px;line-height:1.7;margin:0 0 12px">
+        New contact inquiry from <strong>${escapeHtml(customerName)}</strong>.
+      </p>
+      <table style="border-collapse:collapse;font-size:14px;line-height:1.6;margin:0 0 18px;width:100%">
+        <tr><td style="color:#697386;padding:4px 12px 4px 0;width:120px">Email</td><td style="padding:4px 0">${escapeHtml(customerEmail)}</td></tr>
+        <tr><td style="color:#697386;padding:4px 12px 4px 0">Topic</td><td style="padding:4px 0">${escapeHtml(normalizedTopic)}</td></tr>
+        ${normalizedOrderNumber ? `<tr><td style="color:#697386;padding:4px 12px 4px 0">Order</td><td style="padding:4px 0">${escapeHtml(normalizedOrderNumber)}</td></tr>` : ''}
+      </table>
+      <p style="font-size:15px;line-height:1.7;margin:0;white-space:pre-line">${escapeHtml(normalizedMessage)}</p>
+    `,
+    preheader: `${customerName} sent a Raven Fold contact inquiry.`,
+    title: `Contact inquiry: ${normalizedTopic}`,
+  });
+
+  return sendTransactionalEmail({
+    clientReference: `contact:${Date.now()}:${customerEmail}`,
+    html,
+    recipientEmail: contactSupportEmail,
+    recipientName: 'Raven Fold Support',
+    replyToEmail: customerEmail,
+    replyToName: customerName,
+    subject: `[Raven Fold] ${normalizedTopic}${normalizedOrderNumber ? ` - ${normalizedOrderNumber}` : ''}`,
+    text: [
+      `Name: ${customerName}`,
+      `Email: ${customerEmail}`,
+      `Topic: ${normalizedTopic}`,
+      normalizedOrderNumber ? `Order number: ${normalizedOrderNumber}` : '',
+      '',
+      normalizedMessage,
+    ].filter(Boolean).join('\n'),
+  });
+};
+
 export {
   EMAIL_PROVIDERS,
   escapeHtml,
   getResetPasswordUrl,
+  sendContactInquiryEmail,
   sendInvoiceEmail,
   sendOrderPaymentEmail,
   sendPasswordResetEmail,
@@ -616,6 +670,7 @@ export default {
   EMAIL_PROVIDERS,
   escapeHtml,
   getResetPasswordUrl,
+  sendContactInquiryEmail,
   sendInvoiceEmail,
   sendOrderPaymentEmail,
   sendPasswordResetEmail,

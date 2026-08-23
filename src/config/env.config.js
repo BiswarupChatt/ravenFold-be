@@ -22,6 +22,7 @@ export const emailFromAddress = process.env.EMAIL_FROM_ADDRESS || 'no-reply@rave
 export const emailFromName = process.env.EMAIL_FROM_NAME || 'Raven Fold';
 export const emailReplyToAddress = process.env.EMAIL_REPLY_TO_ADDRESS || emailFromAddress;
 export const emailReplyToName = process.env.EMAIL_REPLY_TO_NAME || emailFromName;
+export const contactSupportEmail = process.env.CONTACT_SUPPORT_EMAIL || emailReplyToAddress || 'support@ravenfold.in';
 export const emailRequestTimeoutMs = Number(process.env.EMAIL_REQUEST_TIMEOUT_MS) || 10000;
 export const zeptoMailApiUrl = process.env.ZEPTO_MAIL_API_URL || 'https://api.zeptomail.com/v1.1/email';
 export const zeptoMailSendToken = process.env.ZEPTO_MAIL_SEND_TOKEN || '';
@@ -108,6 +109,7 @@ export default {
   cloudinaryReviewUploadFolder,
   cloudinaryUploadFolder,
   corsAllowedOrigins,
+  contactSupportEmail,
   emailFromAddress,
   emailFromName,
   emailProvider,
