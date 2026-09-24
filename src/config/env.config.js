@@ -3,7 +3,8 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const appRootPath = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
-const targetEnv = process.env.APP_ENV || process.env.NODE_ENV || 'development';
+const appEnv = process.env.APP_ENV || process.env.NODE_ENV || 'development';
+const targetEnv = appEnv;
 const envFileName = process.env.ENV_FILE || `.env.${targetEnv}`;
 const envFilePath = resolve(appRootPath, envFileName);
 const fallbackEnvFilePath = resolve(appRootPath, '.env');
@@ -12,6 +13,7 @@ dotenv.config({ path: envFilePath, quiet: true });
 dotenv.config({ path: fallbackEnvFilePath, quiet: true });
 
 export const nodeEnv = process.env.NODE_ENV || 'development';
+export const appEnvironment = appEnv;
 export const port = Number(process.env.PORT) || 3000;
 export const apiPrefix = process.env.API_PREFIX || '/api';
 export const trustProxy = process.env.TRUST_PROXY || (nodeEnv === 'production' ? '1' : '');
@@ -97,6 +99,7 @@ export const whatsappWebhookVerifyToken = process.env.WHATSAPP_WEBHOOK_VERIFY_TO
 export default {
   adminUrl,
   adminJwtExpiresIn,
+  appEnvironment,
   apiPrefix,
   authLoginThrottleLockoutMs,
   authLoginThrottleMaxAttempts,
