@@ -32,6 +32,7 @@ const uploadFolders = {
   gst: cloudinaryGstUploadFolder,
   product: cloudinaryUploadFolder,
   review: cloudinaryReviewUploadFolder,
+  storefront: cloudinaryUploadFolder,
   variant: cloudinaryUploadFolder,
 };
 

@@ -3,8 +3,8 @@ import ApiError from '@/common/errors/api.error.js';
 import { sendSuccess } from '@/common/helpers/response.helper.js';
 import cloudinaryService from '@/infrastructure/storage/cloudinary.service.js';
 
-const adminOnlyFolderKeys = new Set(['category', 'gst', 'product', 'variant']);
-const allowedFolderKeys = new Set(['category', 'gst', 'product', 'review', 'variant']);
+const adminOnlyFolderKeys = new Set(['category', 'gst', 'product', 'storefront', 'variant']);
+const allowedFolderKeys = new Set(['category', 'gst', 'product', 'review', 'storefront', 'variant']);
 
 const getFolderKey = (req) => String(req.body?.folderKey || req.query?.folderKey || 'product').trim().toLowerCase();
 
