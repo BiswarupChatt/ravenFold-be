@@ -7,12 +7,21 @@ import {
   normalizeObjectId,
   normalizeText,
 } from '@/common/utils/service.util.js';
-import PopupCampaign, { POPUP_DISPLAY_MODE, popupDisplayModes } from '@/modules/popup-campaign.model.js';
+import PopupCampaign, {
+  CAMPAIGN_CUSTOMER_TARGET,
+  CAMPAIGN_DEVICE_TARGET,
+  CAMPAIGN_PAGE_TARGET,
+  POPUP_DISPLAY_MODE,
+  campaignCustomerTargets,
+  campaignDeviceTargets,
+  campaignPageTargets,
+  popupDisplayModes,
+} from '@/modules/popup-campaign.model.js';
 
 const editablePopupCampaignFields = [
-  'ctaLabel', 'ctaUrl', 'description', 'displayDelaySeconds', 'displayMode',
+  'ctaLabel', 'ctaUrl', 'customerTarget', 'description', 'deviceTarget', 'displayDelaySeconds', 'displayMode',
   'endDate', 'fallbackLabel', 'image', 'isActive', 'isDismissible', 'priority',
-  'repeatAfterDays', 'showEmailInput', 'startDate', 'successMessage', 'title',
+  'pageTarget', 'repeatAfterDays', 'showEmailInput', 'startDate', 'successMessage', 'title',
 ];
 
 const normalizeUserId = (actor = null) => {
@@ -38,6 +47,27 @@ const normalizeInteger = (value, field, { min = null } = {}) => {
   return numberValue;
 };
 
+const normalizeTarget = (value, supportedValues, fallback) => {
+  const normalizedValue = normalizeText(value).toUpperCase();
+
+  return supportedValues.includes(normalizedValue) ? normalizedValue : fallback;
+};
+
+const buildTargetMatch = (field, value, allValue) => ({
+  $or: [
+    { [field]: allValue },
+    { [field]: value },
+    { [field]: null },
+    { [field]: { $exists: false } },
+  ],
+});
+
+const normalizeActiveContext = (query = {}) => ({
+  customerTarget: normalizeTarget(query.customerTarget || query.customer, campaignCustomerTargets, CAMPAIGN_CUSTOMER_TARGET.ALL),
+  deviceTarget: normalizeTarget(query.deviceTarget || query.device, campaignDeviceTargets, CAMPAIGN_DEVICE_TARGET.ALL),
+  pageTarget: normalizeTarget(query.pageTarget || query.page, campaignPageTargets, CAMPAIGN_PAGE_TARGET.ALL),
+});
+
 const normalizeImage = (value) => {
   if (!value) return null;
   return {
@@ -51,6 +81,8 @@ const formatPopupCampaign = (campaign = {}) => ({
   ctaLabel: campaign.ctaLabel || '',
   ctaUrl: campaign.ctaUrl || '',
   description: campaign.description || '',
+  customerTarget: campaign.customerTarget || CAMPAIGN_CUSTOMER_TARGET.ALL,
+  deviceTarget: campaign.deviceTarget || CAMPAIGN_DEVICE_TARGET.ALL,
   displayDelaySeconds: Number(campaign.displayDelaySeconds || 0),
   displayMode: campaign.displayMode || POPUP_DISPLAY_MODE.ONCE_PER_SESSION,
   endDate: campaign.endDate || null,
@@ -59,6 +91,7 @@ const formatPopupCampaign = (campaign = {}) => ({
   isActive: Boolean(campaign.isActive),
   isDismissible: campaign.isDismissible !== false,
   priority: Number(campaign.priority || 0),
+  pageTarget: campaign.pageTarget || CAMPAIGN_PAGE_TARGET.ALL,
   repeatAfterDays: Number(campaign.repeatAfterDays || 7),
   showEmailInput: Boolean(campaign.showEmailInput),
   startDate: campaign.startDate || null,
@@ -69,13 +102,20 @@ const formatPopupCampaign = (campaign = {}) => ({
   updatedAt: campaign.updatedAt || null,
 });
 
-const buildActiveCampaignQuery = (now = new Date()) => ({
+const buildActiveCampaignQuery = (now = new Date(), context = {}) => {
+  const normalizedContext = normalizeActiveContext(context);
+
+  return ({
   isActive: true,
   $and: [
     { $or: [{ startDate: null }, { startDate: { $exists: false } }, { startDate: { $lte: now } }] },
     { $or: [{ endDate: null }, { endDate: { $exists: false } }, { endDate: { $gte: now } }] },
+    buildTargetMatch('deviceTarget', normalizedContext.deviceTarget, CAMPAIGN_DEVICE_TARGET.ALL),
+    buildTargetMatch('pageTarget', normalizedContext.pageTarget, CAMPAIGN_PAGE_TARGET.ALL),
+    buildTargetMatch('customerTarget', normalizedContext.customerTarget, CAMPAIGN_CUSTOMER_TARGET.ALL),
   ],
-});
+  });
+};
 
 const buildPopupCampaignPayload = (payload = {}, { requireTitle = false } = {}) => {
   const campaignPayload = {};
@@ -95,6 +135,12 @@ const buildPopupCampaignPayload = (payload = {}, { requireTitle = false } = {}) 
       const displayMode = normalizeText(payload.displayMode) || POPUP_DISPLAY_MODE.ONCE_PER_SESSION;
       if (!popupDisplayModes.includes(displayMode)) throw new ApiError(400, 'displayMode is not supported');
       campaignPayload.displayMode = displayMode;
+    } else if (field === 'deviceTarget') {
+      campaignPayload.deviceTarget = normalizeTarget(payload.deviceTarget, campaignDeviceTargets, CAMPAIGN_DEVICE_TARGET.ALL);
+    } else if (field === 'pageTarget') {
+      campaignPayload.pageTarget = normalizeTarget(payload.pageTarget, campaignPageTargets, CAMPAIGN_PAGE_TARGET.ALL);
+    } else if (field === 'customerTarget') {
+      campaignPayload.customerTarget = normalizeTarget(payload.customerTarget, campaignCustomerTargets, CAMPAIGN_CUSTOMER_TARGET.ALL);
     } else if (field === 'image') {
       campaignPayload.image = normalizeImage(payload.image);
     } else {
@@ -116,9 +162,9 @@ const getPopupCampaignDocument = async (campaignId) => {
   return campaign;
 };
 
-const listActivePopupCampaigns = async ({ now = new Date() } = {}) => {
+const listActivePopupCampaigns = async ({ now = new Date(), context = {} } = {}) => {
   assertDatabaseReady();
-  const campaigns = await PopupCampaign.find(buildActiveCampaignQuery(now)).sort({ priority: -1, createdAt: -1 }).limit(1).lean().exec();
+  const campaigns = await PopupCampaign.find(buildActiveCampaignQuery(now, context)).sort({ priority: -1, createdAt: -1 }).limit(1).lean().exec();
   return campaigns.map(formatPopupCampaign);
 };
 

@@ -3,7 +3,7 @@ import popupCampaignService from '@/modules/popup-campaign.service.js';
 
 const listActivePopupCampaigns = async (req, res) => sendSuccess(
   res,
-  await popupCampaignService.listActivePopupCampaigns(),
+  await popupCampaignService.listActivePopupCampaigns({ context: req.query }),
   'Active popup campaigns fetched',
 );
 

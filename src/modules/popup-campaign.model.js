@@ -9,7 +9,30 @@ const POPUP_DISPLAY_MODE = {
   ONCE_EVERY_X_DAYS: 'ONCE_EVERY_X_DAYS',
 };
 
+const CAMPAIGN_DEVICE_TARGET = {
+  ALL: 'ALL',
+  DESKTOP: 'DESKTOP',
+  MOBILE: 'MOBILE',
+};
+
+const CAMPAIGN_PAGE_TARGET = {
+  ALL: 'ALL',
+  HOME: 'HOME',
+  PRODUCT: 'PRODUCT',
+  CHECKOUT: 'CHECKOUT',
+};
+
+const CAMPAIGN_CUSTOMER_TARGET = {
+  ALL: 'ALL',
+  LOGGED_IN: 'LOGGED_IN',
+  NEW_VISITOR: 'NEW_VISITOR',
+  RETURNING_VISITOR: 'RETURNING_VISITOR',
+};
+
 const popupDisplayModes = Object.values(POPUP_DISPLAY_MODE);
+const campaignDeviceTargets = Object.values(CAMPAIGN_DEVICE_TARGET);
+const campaignPageTargets = Object.values(CAMPAIGN_PAGE_TARGET);
+const campaignCustomerTargets = Object.values(CAMPAIGN_CUSTOMER_TARGET);
 
 const popupCampaignSchema = new mongoose.Schema(
   {
@@ -34,6 +57,24 @@ const popupCampaignSchema = new mongoose.Schema(
     startDate: { type: Date, default: null, index: true },
     endDate: { type: Date, default: null, index: true },
     priority: { type: Number, default: 0, required: true, index: true },
+    deviceTarget: {
+      type: String,
+      enum: campaignDeviceTargets,
+      default: CAMPAIGN_DEVICE_TARGET.ALL,
+      index: true,
+    },
+    pageTarget: {
+      type: String,
+      enum: campaignPageTargets,
+      default: CAMPAIGN_PAGE_TARGET.ALL,
+      index: true,
+    },
+    customerTarget: {
+      type: String,
+      enum: campaignCustomerTargets,
+      default: CAMPAIGN_CUSTOMER_TARGET.ALL,
+      index: true,
+    },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
   },
   { collection: 'popup_campaigns', timestamps: true, versionKey: false },
@@ -41,6 +82,13 @@ const popupCampaignSchema = new mongoose.Schema(
 
 popupCampaignSchema.index({ isActive: 1, priority: -1, createdAt: -1 });
 popupCampaignSchema.index({ isActive: 1, startDate: 1, endDate: 1, priority: -1 });
+popupCampaignSchema.index({
+  isActive: 1,
+  deviceTarget: 1,
+  pageTarget: 1,
+  customerTarget: 1,
+  priority: -1,
+});
 
 popupCampaignSchema.pre('validate', function validatePopupCampaign() {
   this.title = (this.title || '').trim();
@@ -68,5 +116,15 @@ popupCampaignSchema.pre('validate', function validatePopupCampaign() {
 
 const PopupCampaign = mongoose.models.PopupCampaign || mongoose.model('PopupCampaign', popupCampaignSchema);
 
-export { POPUP_DISPLAY_MODE, popupCampaignSchema, popupDisplayModes };
+export {
+  CAMPAIGN_CUSTOMER_TARGET,
+  CAMPAIGN_DEVICE_TARGET,
+  CAMPAIGN_PAGE_TARGET,
+  POPUP_DISPLAY_MODE,
+  campaignCustomerTargets,
+  campaignDeviceTargets,
+  campaignPageTargets,
+  popupCampaignSchema,
+  popupDisplayModes,
+};
 export default PopupCampaign;

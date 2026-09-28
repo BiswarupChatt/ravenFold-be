@@ -10,18 +10,27 @@ import {
 import AnnouncementBanner, {
   ANNOUNCEMENT_BANNER_PLACEMENT,
   ANNOUNCEMENT_BANNER_VARIANT,
+  CAMPAIGN_CUSTOMER_TARGET,
+  CAMPAIGN_DEVICE_TARGET,
+  CAMPAIGN_PAGE_TARGET,
   announcementBannerPlacements,
   announcementBannerVariants,
+  campaignCustomerTargets,
+  campaignDeviceTargets,
+  campaignPageTargets,
 } from '@/modules/announcement-banner/models/announcement-banner.model.js';
 
 const editableAnnouncementBannerFields = [
   'backgroundColor',
   'ctaLabel',
   'ctaUrl',
+  'customerTarget',
+  'deviceTarget',
   'endDate',
   'isActive',
   'isDismissible',
   'message',
+  'pageTarget',
   'placement',
   'priority',
   'startDate',
@@ -30,7 +39,31 @@ const editableAnnouncementBannerFields = [
   'variant',
 ];
 
-const buildActiveBannerQuery = (now = new Date()) => ({
+const normalizeTarget = (value, supportedValues, fallback) => {
+  const normalizedValue = normalizeText(value).toUpperCase();
+
+  return supportedValues.includes(normalizedValue) ? normalizedValue : fallback;
+};
+
+const buildTargetMatch = (field, value, allValue) => ({
+  $or: [
+    { [field]: allValue },
+    { [field]: value },
+    { [field]: null },
+    { [field]: { $exists: false } },
+  ],
+});
+
+const normalizeActiveContext = (query = {}) => ({
+  customerTarget: normalizeTarget(query.customerTarget || query.customer, campaignCustomerTargets, CAMPAIGN_CUSTOMER_TARGET.ALL),
+  deviceTarget: normalizeTarget(query.deviceTarget || query.device, campaignDeviceTargets, CAMPAIGN_DEVICE_TARGET.ALL),
+  pageTarget: normalizeTarget(query.pageTarget || query.page, campaignPageTargets, CAMPAIGN_PAGE_TARGET.ALL),
+});
+
+const buildActiveBannerQuery = (now = new Date(), context = {}) => {
+  const normalizedContext = normalizeActiveContext(context);
+
+  return ({
   isActive: true,
   placement: ANNOUNCEMENT_BANNER_PLACEMENT.TOP_NAVBAR,
   $and: [
@@ -48,8 +81,12 @@ const buildActiveBannerQuery = (now = new Date()) => ({
         { endDate: { $gte: now } },
       ],
     },
+    buildTargetMatch('deviceTarget', normalizedContext.deviceTarget, CAMPAIGN_DEVICE_TARGET.ALL),
+    buildTargetMatch('pageTarget', normalizedContext.pageTarget, CAMPAIGN_PAGE_TARGET.ALL),
+    buildTargetMatch('customerTarget', normalizedContext.customerTarget, CAMPAIGN_CUSTOMER_TARGET.ALL),
   ],
-});
+  });
+};
 
 const normalizeUserId = (actor = null) => {
   try {
@@ -93,9 +130,12 @@ const formatAnnouncementBanner = (banner = {}) => ({
   ctaLabel: banner.ctaLabel || '',
   ctaUrl: banner.ctaUrl || '',
   endDate: banner.endDate || null,
+  customerTarget: banner.customerTarget || CAMPAIGN_CUSTOMER_TARGET.ALL,
+  deviceTarget: banner.deviceTarget || CAMPAIGN_DEVICE_TARGET.ALL,
   isActive: Boolean(banner.isActive),
   isDismissible: banner.isDismissible !== false,
   message: banner.message || '',
+  pageTarget: banner.pageTarget || CAMPAIGN_PAGE_TARGET.ALL,
   placement: banner.placement || ANNOUNCEMENT_BANNER_PLACEMENT.TOP_NAVBAR,
   priority: Number(banner.priority || 0),
   startDate: banner.startDate || null,
@@ -138,6 +178,21 @@ const buildAnnouncementBannerPayload = (payload = {}, { requireMessage = false }
       }
 
       bannerPayload.placement = placement;
+      continue;
+    }
+
+    if (field === 'deviceTarget') {
+      bannerPayload.deviceTarget = normalizeTarget(payload.deviceTarget, campaignDeviceTargets, CAMPAIGN_DEVICE_TARGET.ALL);
+      continue;
+    }
+
+    if (field === 'pageTarget') {
+      bannerPayload.pageTarget = normalizeTarget(payload.pageTarget, campaignPageTargets, CAMPAIGN_PAGE_TARGET.ALL);
+      continue;
+    }
+
+    if (field === 'customerTarget') {
+      bannerPayload.customerTarget = normalizeTarget(payload.customerTarget, campaignCustomerTargets, CAMPAIGN_CUSTOMER_TARGET.ALL);
       continue;
     }
 
@@ -200,10 +255,10 @@ const getAnnouncementBannerDocument = async (bannerId) => {
   return banner;
 };
 
-const listActiveAnnouncementBanners = async ({ now = new Date() } = {}) => {
+const listActiveAnnouncementBanners = async ({ now = new Date(), context = {} } = {}) => {
   assertDatabaseReady();
 
-  const banners = await AnnouncementBanner.find(buildActiveBannerQuery(now))
+  const banners = await AnnouncementBanner.find(buildActiveBannerQuery(now, context))
     .sort({ priority: -1, createdAt: -1 })
     .lean()
     .exec();

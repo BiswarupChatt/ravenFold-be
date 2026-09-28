@@ -4,7 +4,7 @@ import announcementBannerService from '@/modules/announcement-banner/services/an
 const listActiveAnnouncementBanners = async (req, res) => {
   return sendSuccess(
     res,
-    await announcementBannerService.listActiveAnnouncementBanners(),
+    await announcementBannerService.listActiveAnnouncementBanners({ context: req.query }),
     'Active announcement banners fetched',
   );
 };

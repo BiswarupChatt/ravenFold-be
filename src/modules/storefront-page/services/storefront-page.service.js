@@ -76,7 +76,17 @@ const defaultHomeContent = {
     quote: 'The wallet feels compact, the finish looks premium, and the packaging made it feel ready to gift.',
     rating: 5,
   },
+  sections: [
+    { id: 'hero', isActive: true, sortOrder: 0, type: 'hero' },
+    { id: 'promoStrip', isActive: true, sortOrder: 1, type: 'promoStrip' },
+    { id: 'productSection', isActive: true, sortOrder: 2, type: 'productSection' },
+    { id: 'testimonial', isActive: true, sortOrder: 3, type: 'testimonial' },
+    { id: 'supportCards', isActive: true, sortOrder: 4, type: 'supportCards' },
+    { id: 'finalCta', isActive: true, sortOrder: 5, type: 'finalCta' },
+  ],
 };
+
+const homeSectionTypes = defaultHomeContent.sections.map((section) => section.type);
 
 const normalizeUserId = (actor = null) => {
   try {
@@ -96,6 +106,43 @@ const normalizeStringArray = (value, fallback = []) => (
     ? value.map((item) => normalizeText(item)).filter(Boolean)
     : fallback
 );
+
+const normalizeHomeSections = (content = {}) => {
+  const rawSections = Array.isArray(content.sections) ? content.sections : [];
+  const sectionByType = new Map(
+    rawSections
+      .map((section, index) => {
+        const type = normalizeText(section?.type || section?.id);
+
+        if (!homeSectionTypes.includes(type)) {
+          return null;
+        }
+
+        return [
+          type,
+          {
+            id: normalizeText(section?.id) || type,
+            isActive: normalizeBoolean(section?.isActive, content[type]?.isActive !== false),
+            sortOrder: Number.isInteger(Number(section?.sortOrder)) ? Number(section.sortOrder) : index,
+            type,
+          },
+        ];
+      })
+      .filter(Boolean),
+  );
+
+  return homeSectionTypes
+    .map((type, index) => (
+      sectionByType.get(type) || {
+        id: type,
+        isActive: content[type]?.isActive !== false,
+        sortOrder: rawSections.length + index,
+        type,
+      }
+    ))
+    .sort((first, second) => Number(first.sortOrder || 0) - Number(second.sortOrder || 0))
+    .map((section, index) => ({ ...section, sortOrder: index }));
+};
 
 const normalizeHomeContent = (content = {}) => ({
   finalCta: {
@@ -149,6 +196,7 @@ const normalizeHomeContent = (content = {}) => ({
     quote: normalizeText(content.testimonial?.quote) || defaultHomeContent.testimonial.quote,
     rating: Math.min(Math.max(Number(content.testimonial?.rating || 5), 0), 5),
   },
+  sections: normalizeHomeSections(content),
 });
 
 const formatStorefrontPage = (page = {}) => ({

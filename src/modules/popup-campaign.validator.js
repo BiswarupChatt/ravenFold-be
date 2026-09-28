@@ -12,9 +12,9 @@ import {
 } from '@/common/utils/request-schema.util.js';
 
 const popupCampaignFields = [
-  'ctaLabel', 'ctaUrl', 'description', 'displayDelaySeconds', 'displayMode',
+  'ctaLabel', 'ctaUrl', 'customerTarget', 'description', 'deviceTarget', 'displayDelaySeconds', 'displayMode',
   'endDate', 'fallbackLabel', 'image', 'isActive', 'isDismissible', 'priority',
-  'repeatAfterDays', 'showEmailInput', 'startDate', 'successMessage', 'title',
+  'pageTarget', 'repeatAfterDays', 'showEmailInput', 'startDate', 'successMessage', 'title',
 ];
 
 const validatePopupCampaignPayload = (value, { requireTitle = false, requireAny = false } = {}) => {
@@ -23,8 +23,8 @@ const validatePopupCampaignPayload = (value, { requireTitle = false, requireAny 
   if (requireTitle) assertRequiredKeys(payload, ['title']);
   if (requireAny) assertAtLeastOneKey(payload, popupCampaignFields);
   [
-    'ctaLabel', 'ctaUrl', 'description', 'displayMode', 'endDate',
-    'fallbackLabel', 'startDate', 'successMessage', 'title',
+    'ctaLabel', 'ctaUrl', 'customerTarget', 'description', 'deviceTarget', 'displayMode', 'endDate',
+    'fallbackLabel', 'pageTarget', 'startDate', 'successMessage', 'title',
   ].forEach((field) => assertStringLikeField(payload, field));
   ['isActive', 'isDismissible', 'showEmailInput'].forEach((field) => assertBooleanField(payload, field));
   ['displayDelaySeconds', 'priority', 'repeatAfterDays'].forEach((field) => assertNumberLikeField(payload, field));
